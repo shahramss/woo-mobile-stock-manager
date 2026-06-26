@@ -1,0 +1,60 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+
+      - name: Fix Android settings
+        run: |
+          cat > mobile/android/gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=2G -XX:+HeapDumpOnOutOfMemoryError
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' mobile/android/app/build.gradle
+          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/g' mobile/android/app/build.gradle
+
+          if grep -q "ndkVersion = flutter.ndkVersion" mobile/android/app/build.gradle; then
+            sed -i 's/ndkVersion = flutter.ndkVersion/ndkVersion = "26.1.10909125"/g' mobile/android/app/build.gradle
+          fi
+
+          if grep -q "ndkVersion flutter.ndkVersion" mobile/android/app/build.gradle; then
+            sed -i 's/ndkVersion flutter.ndkVersion/ndkVersion "26.1.10909125"/g' mobile/android/app/build.gradle
+          fi
+
+      - name: Flutter pub get
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Build signed APK
+        working-directory: mobile
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: banomi-manager-signed-apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
