@@ -136,7 +136,7 @@ class ApiService {
   Future<Product> updateProduct({
     required int id,
     required String regularPrice,
-    required int stockQuantity,
+    required String stockQuantity,
     required String stockStatus,
   }) async {
     try {
@@ -144,7 +144,7 @@ class ApiService {
         '/products/$id',
         data: {
           'regular_price': regularPrice.trim(),
-          'stock_quantity': stockQuantity,
+          'stock_quantity': stockQuantity.trim(),
           'stock_status': stockStatus,
         },
       );

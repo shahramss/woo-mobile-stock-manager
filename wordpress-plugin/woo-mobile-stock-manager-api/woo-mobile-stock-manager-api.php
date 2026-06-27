@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Modiriat Sari API
- * Description: REST API امن برای اپلیکیشن مدیریت محصولات ووکامرس + ارسال به بله + تغییر تصویر شاخص + مرتب‌سازی و وضعیت آخرین اکشن.
- * Version: 1.5.0
+ * Description: REST API امن برای اپلیکیشن مدیریت محصولات ووکامرس + ارسال به بله + تغییر تصویر شاخص + مرتب‌سازی، گرادیانت اکشن‌ها و موجودی بدون محدودیت.
+ * Version: 1.6.0
  * Author: شهرام سعیدنیا
  * Text Domain: woo-mobile-stock-manager-api
  */
@@ -24,6 +24,8 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
     private const BALE_COOLDOWN_SECONDS = 3600;
     private const LAST_ACTION_META = '_wmsm_last_action';
     private const LAST_ACTION_AT_META = '_wmsm_last_action_at';
+    private const UPDATED_ACTION_AT_META = '_wmsm_updated_action_at';
+    private const BALE_SENT_ACTION_AT_META = '_wmsm_bale_sent_action_at';
 
     private $authorized_user = null;
 
@@ -343,11 +345,19 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         }
 
         if ($stock_quantity !== null) {
-            if (!is_numeric($stock_quantity) || (int) $stock_quantity < 0) {
-                return $this->error('wmsm_invalid_stock_quantity', 'تعداد موجودی معتبر نیست.', 400);
+            $stock_quantity_raw = trim((string) wp_unslash($stock_quantity));
+
+            // خالی یا ۰ یعنی محدودیت تعداد نداریم و مدیریت موجودی عددی غیرفعال می‌شود.
+            if ($stock_quantity_raw === '' || $stock_quantity_raw === '0') {
+                $product->set_manage_stock(false);
+                $product->set_stock_quantity(null);
+            } else {
+                if (!is_numeric($stock_quantity_raw) || (int) $stock_quantity_raw < 0) {
+                    return $this->error('wmsm_invalid_stock_quantity', 'تعداد موجودی معتبر نیست.', 400);
+                }
+                $product->set_manage_stock(true);
+                $product->set_stock_quantity(wc_stock_amount($stock_quantity_raw));
             }
-            $product->set_manage_stock(true);
-            $product->set_stock_quantity(wc_stock_amount($stock_quantity));
         }
 
         if ($stock_status !== null) {
@@ -952,10 +962,18 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
     private function format_product(WC_Product $product): array {
         $last_action = (string) get_post_meta($product->get_id(), self::LAST_ACTION_META, true);
         $last_action_at = (string) get_post_meta($product->get_id(), self::LAST_ACTION_AT_META, true);
+        $updated_action_at = (string) get_post_meta($product->get_id(), self::UPDATED_ACTION_AT_META, true);
+        $bale_sent_action_at = (string) get_post_meta($product->get_id(), self::BALE_SENT_ACTION_AT_META, true);
 
         if (!$this->is_last_action_recent($last_action_at)) {
             $last_action = '';
             $last_action_at = '';
+        }
+        if (!$this->is_last_action_recent($updated_action_at)) {
+            $updated_action_at = '';
+        }
+        if (!$this->is_last_action_recent($bale_sent_action_at)) {
+            $bale_sent_action_at = '';
         }
 
         return [
@@ -969,6 +987,8 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             'bale_cooldown_remaining' => $this->get_bale_cooldown_remaining($product->get_id()),
             'last_action' => $last_action,
             'last_action_at' => $last_action_at,
+            'updated_action_at' => $updated_action_at,
+            'bale_sent_action_at' => $bale_sent_action_at,
         ];
     }
 
@@ -989,8 +1009,18 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         if (!in_array($action, ['updated', 'bale_sent'], true)) {
             return;
         }
+
+        $now = gmdate('c');
         update_post_meta($product_id, self::LAST_ACTION_META, $action);
-        update_post_meta($product_id, self::LAST_ACTION_AT_META, gmdate('c'));
+        update_post_meta($product_id, self::LAST_ACTION_AT_META, $now);
+
+        // زمان هر اکشن جدا ذخیره می‌شود تا اگر محصول هم بروزرسانی شد و هم به بله رفت، در اپ گرادیانت سبز/آبی شود.
+        if ($action === 'updated') {
+            update_post_meta($product_id, self::UPDATED_ACTION_AT_META, $now);
+        }
+        if ($action === 'bale_sent') {
+            update_post_meta($product_id, self::BALE_SENT_ACTION_AT_META, $now);
+        }
     }
 
     private function get_product_image_url(WC_Product $product, string $size = 'woocommerce_thumbnail'): string {

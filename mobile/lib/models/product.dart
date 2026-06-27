@@ -10,6 +10,8 @@ class Product {
     required this.baleCooldownRemaining,
     required this.lastAction,
     required this.lastActionAt,
+    required this.updatedActionAt,
+    required this.baleSentActionAt,
   });
 
   final int id;
@@ -22,18 +24,30 @@ class Product {
   final int baleCooldownRemaining;
   final String lastAction;
   final String lastActionAt;
+  final String updatedActionAt;
+  final String baleSentActionAt;
 
   bool get isInStock => stockStatus == 'instock';
-  bool get hasRecentAction {
-    if (lastAction.isEmpty || lastActionAt.isEmpty) return false;
-    final parsed = DateTime.tryParse(lastActionAt);
+  bool _isRecent(String value) {
+    if (value.isEmpty) return false;
+    final parsed = DateTime.tryParse(value);
     if (parsed == null) return false;
     final diff = DateTime.now().toUtc().difference(parsed.toUtc());
     return !diff.isNegative && diff.inHours < 24;
   }
 
-  bool get wasUpdatedLast => hasRecentAction && lastAction == 'updated';
-  bool get wasSentToBaleLast => hasRecentAction && lastAction == 'bale_sent';
+  bool get hasRecentAction => wasUpdatedRecent || wasSentToBaleRecent;
+
+  // اگر محصول در ۲۴ ساعت اخیر بروزرسانی شده باشد.
+  bool get wasUpdatedRecent => _isRecent(updatedActionAt) || (lastAction == 'updated' && _isRecent(lastActionAt));
+
+  // اگر محصول در ۲۴ ساعت اخیر به بله ارسال شده باشد.
+  bool get wasSentToBaleRecent => _isRecent(baleSentActionAt) || (lastAction == 'bale_sent' && _isRecent(lastActionAt));
+
+  bool get hasBothRecentActions => wasUpdatedRecent && wasSentToBaleRecent;
+
+  bool get wasUpdatedLast => wasUpdatedRecent;
+  bool get wasSentToBaleLast => wasSentToBaleRecent;
 
   Product copyWith({
     String? regularPrice,
@@ -43,6 +57,8 @@ class Product {
     int? baleCooldownRemaining,
     String? lastAction,
     String? lastActionAt,
+    String? updatedActionAt,
+    String? baleSentActionAt,
   }) {
     return Product(
       id: id,
@@ -55,6 +71,8 @@ class Product {
       baleCooldownRemaining: baleCooldownRemaining ?? this.baleCooldownRemaining,
       lastAction: lastAction ?? this.lastAction,
       lastActionAt: lastActionAt ?? this.lastActionAt,
+      updatedActionAt: updatedActionAt ?? this.updatedActionAt,
+      baleSentActionAt: baleSentActionAt ?? this.baleSentActionAt,
     );
   }
 
@@ -72,6 +90,8 @@ class Product {
       baleCooldownRemaining: int.tryParse((json['bale_cooldown_remaining'] ?? '0').toString()) ?? 0,
       lastAction: (json['last_action'] ?? '').toString(),
       lastActionAt: (json['last_action_at'] ?? '').toString(),
+      updatedActionAt: (json['updated_action_at'] ?? '').toString(),
+      baleSentActionAt: (json['bale_sent_action_at'] ?? '').toString(),
     );
   }
 }

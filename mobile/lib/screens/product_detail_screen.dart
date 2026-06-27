@@ -63,7 +63,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       final product = await api.getProduct(widget.productId);
       _product = product;
       _priceController.text = product.regularPrice;
-      _stockController.text = (product.stockQuantity ?? 0).toString();
+      _stockController.text = (product.stockQuantity == null || product.stockQuantity == 0) ? '' : product.stockQuantity.toString();
       _inStock = product.isInStock;
       _setCooldown(product.baleCooldownRemaining);
     } on ApiException catch (e) {
@@ -85,7 +85,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       final updated = await api.updateProduct(
         id: widget.productId,
         regularPrice: _normalizeNumber(_priceController.text),
-        stockQuantity: int.parse(_normalizeNumber(_stockController.text)),
+        stockQuantity: _normalizeNumber(_stockController.text),
         stockStatus: _inStock ? 'instock' : 'outofstock',
       );
 
@@ -155,7 +155,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _hasChanged = true;
       if (_product != null) {
         setState(() {
-          _product = _product!.copyWith(lastAction: 'bale_sent');
+          _product = _product!.copyWith(
+            lastAction: 'bale_sent',
+            lastActionAt: DateTime.now().toUtc().toIso8601String(),
+            baleSentActionAt: DateTime.now().toUtc().toIso8601String(),
+          );
         });
       }
       _showMessage(result.message);
@@ -312,15 +316,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               textDirection: TextDirection.ltr,
               decoration: const InputDecoration(
                 labelText: 'تعداد موجودی انبار',
+                hintText: 'خالی یا ۰ = بدون محدودیت تعداد',
                 prefixIcon: Icon(Icons.inventory_2_outlined),
               ),
               validator: (value) {
                 final text = _normalizeNumber(value ?? '');
-                if (text.isEmpty) return 'تعداد انبار را وارد کنید.';
+                if (text.isEmpty) return null;
                 final number = int.tryParse(text);
                 if (number == null || number < 0) return 'تعداد انبار معتبر نیست.';
                 return null;
               },
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'اگر موجودی را خالی بگذاری یا ۰ بزنی، یعنی محدودیت تعداد نداریم.',
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 12.3, height: 1.5),
             ),
             const SizedBox(height: 14),
             Container(

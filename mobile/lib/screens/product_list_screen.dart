@@ -499,18 +499,25 @@ class _ProductCard extends StatelessWidget {
     final style = _actionStyle(product);
 
     return Card(
-      color: style.background,
+      color: Colors.transparent,
+      elevation: product.hasRecentAction ? 1.8 : 0.8,
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(color: style.border, width: product.hasRecentAction ? 1.4 : 0.7),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
+      child: Container(
+        decoration: BoxDecoration(
+          color: style.gradient == null ? style.background : null,
+          gradient: style.gradient,
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
               _ProductImage(imageUrl: product.imageUrl),
               const SizedBox(width: 12),
               Expanded(
@@ -551,9 +558,10 @@ class _ProductCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_left_rounded, color: Color(0xFF94A3B8)),
-            ],
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_left_rounded, color: Color(0xFF94A3B8)),
+              ],
+            ),
           ),
         ),
       ),
@@ -561,6 +569,19 @@ class _ProductCard extends StatelessWidget {
   }
 
   _ProductActionStyle _actionStyle(Product product) {
+    if (product.hasBothRecentActions) {
+      return const _ProductActionStyle(
+        background: Colors.white,
+        gradient: LinearGradient(
+          begin: Alignment.centerRight,
+          end: Alignment.centerLeft,
+          colors: [Color(0xFFEFF6FF), Color(0xFFF0FDF4)],
+        ),
+        border: Color(0xFF38BDF8),
+        badgeColor: Color(0xFF0891B2),
+        label: 'بروزرسانی + بله',
+      );
+    }
     if (product.wasSentToBaleLast) {
       return const _ProductActionStyle(
         background: Color(0xFFF0FDF4),
@@ -589,12 +610,14 @@ class _ProductCard extends StatelessWidget {
 class _ProductActionStyle {
   const _ProductActionStyle({
     required this.background,
+    this.gradient,
     required this.border,
     required this.badgeColor,
     required this.label,
   });
 
   final Color background;
+  final Gradient? gradient;
   final Color border;
   final Color badgeColor;
   final String label;
