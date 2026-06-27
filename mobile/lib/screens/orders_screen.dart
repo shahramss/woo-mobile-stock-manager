@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -17,6 +19,7 @@ class OrdersScreen extends StatefulWidget {
 class _OrdersScreenState extends State<OrdersScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<OrderSummary> _orders = [];
+  Timer? _timeRefreshTimer;
   int _page = 1;
   bool _hasMore = true;
   bool _loading = false;
@@ -27,10 +30,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
     super.initState();
     _loadOrders(refresh: true);
     _scrollController.addListener(_onScroll);
+    // زمان نسبی سفارش‌ها مثل «۱۶ ساعت قبل» بدون دریافت دوباره از سرور بروزرسانی می‌شود.
+    _timeRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted && _orders.isNotEmpty) setState(() {});
+    });
   }
 
   @override
   void dispose() {
+    _timeRefreshTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
@@ -178,7 +186,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               children: [
                 Text('سفارشات', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w900)),
                 SizedBox(height: 4),
-                Text('برای دریافت سفارش‌های تازه، دکمه بزرگ پایین صفحه را بزنید', style: TextStyle(color: Color(0xFFFCE7F3), fontSize: 12.5, fontWeight: FontWeight.w700)),
+                Text('زمان سفارش‌ها خودکار بروزرسانی می‌شود؛ برای سفارش‌های تازه دکمه پایین صفحه را بزنید', style: TextStyle(color: Color(0xFFFCE7F3), fontSize: 12.5, fontWeight: FontWeight.w700)),
               ],
             ),
           ),

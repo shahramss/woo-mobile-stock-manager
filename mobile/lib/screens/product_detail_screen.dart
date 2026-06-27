@@ -382,12 +382,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   : const Icon(Icons.save_outlined),
               label: Text(_saving ? 'در حال ذخیره...' : 'ذخیره تغییرات'),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'بعد از ذخیره، اطلاعات محصول دوباره از سایت دریافت می‌شود تا کش نشود.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5),
-            ),
             const SizedBox(height: 14),
             _baleCard(),
           ],
@@ -461,6 +455,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 6),
+            const Text(
+              'برای ناموجود کردن محصول اول تعداد در انبار ۰ بزنید و بعد روی دکمه ناموجود کنید، سپس روی ذخیره تغییرات بزنید.',
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 12.3, height: 1.5),
+            ),
           ],
         ),
       ),
@@ -493,7 +492,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     children: [
                       Text('ارسال در کانال بله', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
                       SizedBox(height: 3),
-                      Text('پست بدون نمایش موجودی منتشر می‌شود', style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5)),
+                      Text('این محصول را در کانال بله وارد کنید', style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5)),
                     ],
                   ),
                 ),
@@ -664,7 +663,7 @@ class _GalleryCard extends StatelessWidget {
                     children: [
                       Text('گالری تصاویر محصول', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
                       SizedBox(height: 4),
-                      Text('تصاویر ۱۰۰×۱۰۰ و اسکرول افقی', style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5)),
+                      Text('تصاویر را حذف یا اضافه کنید، سپس روی ذخیره تغییرات بزنید', style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5)),
                     ],
                   ),
                 ),
