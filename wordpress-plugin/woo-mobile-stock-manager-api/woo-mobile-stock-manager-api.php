@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Modiriat Sari API
- * Description: REST API امن برای اپلیکیشن مدیریت محصولات ووکامرس + سفارشات + ارسال به بله + تغییر تصویر شاخص + رنگ محلی اپ + سفارشات و فاکتور گالری.
- * Version: 1.9.0
+ * Description: REST API امن برای اپلیکیشن مدیریت سریع: محصولات، سفارشات، بله، تصویر شاخص مستقل و گالری محصول.
+ * Version: 2.0.0
  * Author: شهرام سعیدنیا
  * Text Domain: woo-mobile-stock-manager-api
  */
@@ -114,6 +114,25 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             'permission_callback' => [$this, 'can_access'],
             'args' => [
                 'id' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/products/(?P<id>\d+)/gallery-image', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'add_product_gallery_image'],
+            'permission_callback' => [$this, 'can_access'],
+            'args' => [
+                'id' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/products/(?P<id>\d+)/gallery-image/(?P<image_id>\d+)', [
+            'methods' => WP_REST_Server::DELETABLE,
+            'callback' => [$this, 'delete_product_gallery_image'],
+            'permission_callback' => [$this, 'can_access'],
+            'args' => [
+                'id' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint'],
+                'image_id' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint'],
             ],
         ]);
 
@@ -359,6 +378,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
                 return $this->error('wmsm_invalid_price', 'قیمت محصول معتبر نیست.', 400);
             }
             $product->set_regular_price($regular_price);
+            $product->set_price($regular_price);
         }
 
         if ($stock_quantity !== null) {
@@ -387,12 +407,15 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
 
         try {
             $product->save();
+            clean_post_cache($product_id);
+            wc_delete_product_transients($product_id);
             $this->set_product_last_action($product_id, 'updated');
+            $fresh_product = wc_get_product($product_id);
         } catch (Exception $e) {
             return $this->error('wmsm_save_failed', 'ذخیره محصول انجام نشد.', 500);
         }
 
-        return rest_ensure_response($this->format_product($product));
+        return rest_ensure_response($this->format_product($fresh_product ?: $product));
     }
 
 
@@ -454,6 +477,85 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             $fresh_product = wc_get_product($product_id);
         } catch (Exception $e) {
             return $this->error('wmsm_image_product_save_failed', 'تصویر آپلود شد اما روی محصول ذخیره نشد.', 500);
+        }
+
+        return rest_ensure_response($this->format_product($fresh_product ?: $product));
+    }
+
+
+
+    public function add_product_gallery_image(WP_REST_Request $request) {
+        $wc_error = $this->ensure_woocommerce();
+        if (is_wp_error($wc_error)) {
+            return $wc_error;
+        }
+
+        $product_id = absint($request['id']);
+        $product = wc_get_product($product_id);
+        if (!$product) {
+            return $this->error('wmsm_product_not_found', 'محصول پیدا نشد.', 404);
+        }
+        if (!$this->can_edit_this_product($product_id)) {
+            return $this->error('wmsm_product_forbidden', 'اجازه ویرایش این محصول را ندارید.', 403);
+        }
+
+        $attachment_id = $this->handle_product_image_upload($request, $product_id, $product->get_name());
+        if (is_wp_error($attachment_id)) {
+            return $attachment_id;
+        }
+
+        try {
+            $gallery_ids = array_values(array_filter(array_map('absint', $product->get_gallery_image_ids())));
+            if (!in_array((int) $attachment_id, $gallery_ids, true)) {
+                $gallery_ids[] = (int) $attachment_id;
+            }
+            $product->set_gallery_image_ids($gallery_ids);
+            $product->save();
+            clean_post_cache($product_id);
+            wc_delete_product_transients($product_id);
+            $this->set_product_last_action($product_id, 'updated');
+            $fresh_product = wc_get_product($product_id);
+        } catch (Exception $e) {
+            return $this->error('wmsm_gallery_save_failed', 'تصویر آپلود شد اما در گالری محصول ذخیره نشد.', 500);
+        }
+
+        return rest_ensure_response($this->format_product($fresh_product ?: $product));
+    }
+
+    public function delete_product_gallery_image(WP_REST_Request $request) {
+        $wc_error = $this->ensure_woocommerce();
+        if (is_wp_error($wc_error)) {
+            return $wc_error;
+        }
+
+        $product_id = absint($request['id']);
+        $image_id = absint($request['image_id']);
+        $product = wc_get_product($product_id);
+        if (!$product) {
+            return $this->error('wmsm_product_not_found', 'محصول پیدا نشد.', 404);
+        }
+        if (!$this->can_edit_this_product($product_id)) {
+            return $this->error('wmsm_product_forbidden', 'اجازه ویرایش این محصول را ندارید.', 403);
+        }
+        if ($image_id <= 0) {
+            return $this->error('wmsm_gallery_image_invalid', 'تصویر گالری معتبر نیست.', 400);
+        }
+
+        $gallery_ids = array_values(array_filter(array_map('absint', $product->get_gallery_image_ids())));
+        if (!in_array($image_id, $gallery_ids, true)) {
+            return $this->error('wmsm_gallery_image_not_found', 'این تصویر در گالری محصول وجود ندارد.', 404);
+        }
+
+        try {
+            $gallery_ids = array_values(array_diff($gallery_ids, [$image_id]));
+            $product->set_gallery_image_ids($gallery_ids);
+            $product->save();
+            clean_post_cache($product_id);
+            wc_delete_product_transients($product_id);
+            $this->set_product_last_action($product_id, 'updated');
+            $fresh_product = wc_get_product($product_id);
+        } catch (Exception $e) {
+            return $this->error('wmsm_gallery_delete_failed', 'حذف تصویر از گالری انجام نشد.', 500);
         }
 
         return rest_ensure_response($this->format_product($fresh_product ?: $product));
@@ -1152,6 +1254,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             'stock_quantity' => $product->get_stock_quantity(),
             'stock_status' => $product->get_stock_status(),
             'image_url' => $this->get_product_image_url($product),
+            'gallery_images' => $this->get_product_gallery_images($product),
             'bale_cooldown_remaining' => $this->get_bale_cooldown_remaining($product->get_id()),
             'last_action' => $last_action,
             'last_action_at' => $last_action_at,
@@ -1201,7 +1304,73 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         if (!$url && $size !== 'medium') {
             $url = wp_get_attachment_image_url($image_id, 'medium');
         }
-        return $url ?: '';
+        return $url ? $this->add_cache_bust_to_url($url) : '';
+    }
+
+    private function get_product_gallery_images(WC_Product $product): array {
+        $items = [];
+        foreach ($product->get_gallery_image_ids() as $image_id) {
+            $image_id = absint($image_id);
+            if (!$image_id) {
+                continue;
+            }
+            $url = wp_get_attachment_image_url($image_id, 'woocommerce_thumbnail');
+            if (!$url) {
+                $url = wp_get_attachment_image_url($image_id, 'medium');
+            }
+            if (!$url) {
+                $url = wp_get_attachment_url($image_id);
+            }
+            if ($url) {
+                $items[] = [
+                    'id' => $image_id,
+                    'url' => $this->add_cache_bust_to_url($url),
+                ];
+            }
+        }
+        return $items;
+    }
+
+    private function add_cache_bust_to_url(string $url): string {
+        if ($url === '') {
+            return '';
+        }
+        return add_query_arg('wmsm_nc', time(), $url);
+    }
+
+    private function handle_product_image_upload(WP_REST_Request $request, int $product_id, string $title) {
+        $files = $request->get_file_params();
+        if (empty($files['image']) || !is_array($files['image'])) {
+            return $this->error('wmsm_image_missing', 'فایل تصویر ارسال نشده است.', 400);
+        }
+
+        $file = $files['image'];
+        if (!empty($file['error'])) {
+            return $this->error('wmsm_image_upload_error', 'آپلود تصویر انجام نشد. لطفاً دوباره تلاش کنید.', 400);
+        }
+
+        $max_size = 10 * 1024 * 1024;
+        if (!empty($file['size']) && (int) $file['size'] > $max_size) {
+            return $this->error('wmsm_image_too_large', 'حجم تصویر نباید بیشتر از ۱۰ مگابایت باشد.', 400);
+        }
+
+        $allowed_mimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        $mime_type = !empty($file['type']) ? sanitize_mime_type($file['type']) : '';
+        if ($mime_type !== '' && !in_array($mime_type, $allowed_mimes, true)) {
+            return $this->error('wmsm_image_invalid_type', 'فرمت تصویر باید JPG، PNG، WEBP یا GIF باشد.', 400);
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+
+        $attachment_id = media_handle_sideload($file, $product_id, $title);
+        if (is_wp_error($attachment_id)) {
+            return $this->error('wmsm_image_save_failed', 'ذخیره تصویر در وردپرس انجام نشد: ' . $attachment_id->get_error_message(), 500);
+        }
+
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', $title);
+        return (int) $attachment_id;
     }
 
     private function create_random_secret(): string {

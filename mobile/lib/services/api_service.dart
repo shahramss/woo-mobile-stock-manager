@@ -56,6 +56,20 @@ class ApiService {
     return url;
   }
 
+
+  Options get _noCacheOptions => Options(headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      });
+
+  Map<String, dynamic> _withNoCache(Map<String, dynamic> params) {
+    return {
+      ...params,
+      '_wmsm_nc': DateTime.now().millisecondsSinceEpoch,
+    };
+  }
+
   Future<LoginResult> login({
     required String username,
     required String password,
@@ -102,13 +116,14 @@ class ApiService {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
         '/products',
-        queryParameters: {
+        queryParameters: _withNoCache({
           if (categoryId != null && categoryId > 0) 'category_id': categoryId,
           if (search.trim().isNotEmpty) 'search': search.trim(),
           'sort': sort,
           'page': page,
           'per_page': perPage,
-        },
+        }),
+        options: _noCacheOptions,
       );
       final data = response.data ?? {};
       final itemsJson = (data['items'] as List<dynamic>? ?? []);
@@ -127,7 +142,11 @@ class ApiService {
 
   Future<Product> getProduct(int id) async {
     try {
-      final response = await _dio.get<Map<String, dynamic>>('/products/$id');
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/products/$id',
+        queryParameters: _withNoCache({}),
+        options: _noCacheOptions,
+      );
       return Product.fromJson(response.data ?? {});
     } on DioException catch (e) {
       throw ApiException(_readDioError(e));
@@ -148,6 +167,7 @@ class ApiService {
           'stock_quantity': stockQuantity.trim(),
           'stock_status': stockStatus,
         },
+        options: _noCacheOptions,
       );
       return Product.fromJson(response.data ?? {});
     } on DioException catch (e) {
@@ -168,6 +188,42 @@ class ApiService {
         data: FormData.fromMap({
           'image': await MultipartFile.fromFile(imagePath, filename: fileName),
         }),
+        options: _noCacheOptions,
+      );
+      return Product.fromJson(response.data ?? {});
+    } on DioException catch (e) {
+      throw ApiException(_readDioError(e));
+    }
+  }
+
+
+  Future<Product> addProductGalleryImage({
+    required int id,
+    required String imagePath,
+  }) async {
+    try {
+      final fileName = imagePath.split('/').isEmpty ? 'gallery-image.jpg' : imagePath.split('/').last;
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/products/$id/gallery-image',
+        data: FormData.fromMap({
+          'image': await MultipartFile.fromFile(imagePath, filename: fileName),
+        }),
+        options: _noCacheOptions,
+      );
+      return Product.fromJson(response.data ?? {});
+    } on DioException catch (e) {
+      throw ApiException(_readDioError(e));
+    }
+  }
+
+  Future<Product> deleteProductGalleryImage({
+    required int id,
+    required int imageId,
+  }) async {
+    try {
+      final response = await _dio.delete<Map<String, dynamic>>(
+        '/products/$id/gallery-image/$imageId',
+        options: _noCacheOptions,
       );
       return Product.fromJson(response.data ?? {});
     } on DioException catch (e) {
@@ -262,10 +318,11 @@ class ApiService {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
         '/orders',
-        queryParameters: {
+        queryParameters: _withNoCache({
           'page': page,
           'per_page': perPage,
-        },
+        }),
+        options: _noCacheOptions,
       );
       final data = response.data ?? {};
       final itemsJson = (data['items'] as List<dynamic>? ?? []);
@@ -281,7 +338,11 @@ class ApiService {
 
   Future<OrderDetail> getOrder(int id) async {
     try {
-      final response = await _dio.get<Map<String, dynamic>>('/orders/$id');
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/orders/$id',
+        queryParameters: _withNoCache({}),
+        options: _noCacheOptions,
+      );
       return OrderDetail.fromJson(response.data ?? {});
     } on DioException catch (e) {
       throw ApiException(_readDioError(e));

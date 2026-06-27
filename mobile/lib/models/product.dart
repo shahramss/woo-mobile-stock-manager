@@ -1,3 +1,17 @@
+class ProductGalleryImage {
+  ProductGalleryImage({required this.id, required this.url});
+
+  final int id;
+  final String url;
+
+  factory ProductGalleryImage.fromJson(Map<String, dynamic> json) {
+    return ProductGalleryImage(
+      id: int.tryParse((json['id'] ?? '0').toString()) ?? 0,
+      url: (json['url'] ?? '').toString(),
+    );
+  }
+}
+
 class Product {
   Product({
     required this.id,
@@ -13,6 +27,7 @@ class Product {
     required this.updatedActionAt,
     required this.baleSentActionAt,
     required this.actionState,
+    required this.galleryImages,
   });
 
   final int id;
@@ -31,6 +46,7 @@ class Product {
   /// حالت رنگ محصول که از افزونه وردپرس می‌آید:
   /// none / updated / bale_sent / both
   final String actionState;
+  final List<ProductGalleryImage> galleryImages;
 
   bool get isInStock => stockStatus == 'instock';
 
@@ -69,6 +85,7 @@ class Product {
     String? updatedActionAt,
     String? baleSentActionAt,
     String? actionState,
+    List<ProductGalleryImage>? galleryImages,
   }) {
     return Product(
       id: id,
@@ -84,6 +101,7 @@ class Product {
       updatedActionAt: updatedActionAt ?? this.updatedActionAt,
       baleSentActionAt: baleSentActionAt ?? this.baleSentActionAt,
       actionState: actionState ?? this.actionState,
+      galleryImages: galleryImages ?? this.galleryImages,
     );
   }
 
@@ -107,6 +125,10 @@ class Product {
         updatedActionAt: updatedAt,
         baleSentActionAt: baleAt,
         actionState: 'none',
+        galleryImages: (json['gallery_images'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map(ProductGalleryImage.fromJson)
+            .toList(),
       );
       if (temp.wasUpdatedRecent && temp.wasSentToBaleRecent) {
         state = 'both';
@@ -133,6 +155,10 @@ class Product {
       updatedActionAt: updatedAt,
       baleSentActionAt: baleAt,
       actionState: state,
+      galleryImages: (json['gallery_images'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(ProductGalleryImage.fromJson)
+          .toList(),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -32,11 +33,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _loading = true;
   bool _saving = false;
   bool _sendingToBale = false;
-  bool _uploadingImage = false;
+  bool _uploadingGallery = false;
+  bool _deletingGallery = false;
   bool _inStock = true;
   bool _hasChanged = false;
   int _baleCooldown = 0;
   String? _error;
+  String? _pendingFeaturedImagePath;
 
   @override
   void initState() {
@@ -53,26 +56,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     super.dispose();
   }
 
-  Future<void> _loadProduct() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _loadProduct({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
 
     try {
       final api = context.read<AuthProvider>().api;
       final product = await api.getProduct(widget.productId);
-      _product = product;
-      _priceController.text = product.regularPrice;
-      _stockController.text = (product.stockQuantity == null || product.stockQuantity == 0) ? '' : product.stockQuantity.toString();
-      _inStock = product.isInStock;
-      _setCooldown(product.baleCooldownRemaining);
+      final localProduct = await LocalProductActionStore.applyToProduct(product);
+      if (!mounted) return;
+      setState(() {
+        _product = localProduct;
+        _priceController.text = localProduct.regularPrice;
+        _stockController.text = (localProduct.stockQuantity == null || localProduct.stockQuantity == 0) ? '' : localProduct.stockQuantity.toString();
+        _inStock = localProduct.isInStock;
+        _error = null;
+      });
+      _setCooldown(localProduct.baleCooldownRemaining);
     } on ApiException catch (e) {
-      _error = e.message;
+      if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      _error = 'جزئیات محصول دریافت نشد.';
+      if (mounted) setState(() => _error = 'جزئیات محصول دریافت نشد.');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && !silent) setState(() => _loading = false);
     }
   }
 
@@ -83,33 +93,48 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     setState(() => _saving = true);
     try {
       final api = context.read<AuthProvider>().api;
-      final updated = await api.updateProduct(
+
+      await api.updateProduct(
         id: widget.productId,
         regularPrice: _normalizeNumber(_priceController.text),
         stockQuantity: _normalizeNumber(_stockController.text),
         stockStatus: _inStock ? 'instock' : 'outofstock',
       );
 
-      await LocalProductActionStore.markUpdated(widget.productId);
-      final localUpdated = await LocalProductActionStore.applyToProduct(updated);
+      // اگر کاربر تصویر شاخص جدید انتخاب کرده باشد، همین ذخیره تغییرات آن را هم مستقل ثبت می‌کند.
+      if (_pendingFeaturedImagePath != null && _pendingFeaturedImagePath!.isNotEmpty) {
+        await api.updateProductImage(
+          id: widget.productId,
+          imagePath: _pendingFeaturedImagePath!,
+        );
+      }
 
+      // بعد از ذخیره، محصول از سرور دوباره گرفته می‌شود تا هیچ کش یا اطلاعات قدیمی در اپ نماند.
+      final fresh = await api.getProduct(widget.productId);
+      await LocalProductActionStore.markUpdated(widget.productId);
+      final localUpdated = await LocalProductActionStore.applyToProduct(fresh);
+
+      if (!mounted) return;
       setState(() {
         _product = localUpdated;
+        _pendingFeaturedImagePath = null;
+        _priceController.text = localUpdated.regularPrice;
+        _stockController.text = (localUpdated.stockQuantity == null || localUpdated.stockQuantity == 0) ? '' : localUpdated.stockQuantity.toString();
+        _inStock = localUpdated.isInStock;
         _hasChanged = true;
       });
-      _showMessage('تغییرات ذخیره شد. برای برگشت، ضربدر بالا را بزنید.');
+      _showMessage('تغییرات از سایت ذخیره و دوباره دریافت شد. برای برگشت، ضربدر بالا را بزنید.');
     } on ApiException catch (e) {
       _showMessage(e.message);
     } catch (_) {
-      _showMessage('ذخیره تغییرات انجام نشد.');
+      _showMessage('ذخیره تغییرات انجام نشد. اتصال سایت و افزونه را بررسی کنید.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-
-  Future<void> _changeFeaturedImage() async {
-    if (_product == null || _uploadingImage) return;
+  Future<void> _pickFeaturedImage() async {
+    if (_product == null || _saving) return;
 
     try {
       final picked = await ImagePicker().pickImage(
@@ -119,38 +144,83 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       );
       if (picked == null) return;
 
-      setState(() => _uploadingImage = true);
-      final api = context.read<AuthProvider>().api;
-      await api.updateProductImage(
-        id: widget.productId,
-        imagePath: picked.path,
+      setState(() => _pendingFeaturedImagePath = picked.path);
+      _showMessage('تصویر شاخص انتخاب شد. برای ثبت در سایت روی «ذخیره تغییرات» بزنید.');
+    } catch (_) {
+      _showMessage('انتخاب تصویر انجام نشد.');
+    }
+  }
+
+  Future<void> _addGalleryImage() async {
+    if (_product == null || _uploadingGallery) return;
+
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 88,
+        maxWidth: 2200,
       );
+      if (picked == null) return;
 
-      // بعد از آپلود تصویر، محصول را جداگانه دوباره می‌گیریم تا تغییر تصویر مستقل از قیمت/موجودی اعمال شود.
-      var refreshed = await api.getProduct(widget.productId);
-      if (refreshed.imageUrl.isNotEmpty) {
-        refreshed = refreshed.copyWith(imageUrl: _withCacheBust(refreshed.imageUrl));
-      }
+      setState(() => _uploadingGallery = true);
+      final api = context.read<AuthProvider>().api;
+      await api.addProductGalleryImage(id: widget.productId, imagePath: picked.path);
 
+      final fresh = await api.getProduct(widget.productId);
       await LocalProductActionStore.markUpdated(widget.productId);
-      final localUpdated = await LocalProductActionStore.applyToProduct(refreshed);
+      final localUpdated = await LocalProductActionStore.applyToProduct(fresh);
+      if (!mounted) return;
       setState(() {
         _product = localUpdated;
         _hasChanged = true;
       });
-      _showMessage('تصویر شاخص محصول تغییر کرد.');
+      _showMessage('تصویر به گالری محصول اضافه شد.');
     } on ApiException catch (e) {
       _showMessage(e.message);
     } catch (_) {
-      _showMessage('تغییر تصویر شاخص انجام نشد. دوباره تلاش کنید.');
+      _showMessage('اضافه کردن تصویر گالری انجام نشد.');
     } finally {
-      if (mounted) setState(() => _uploadingImage = false);
+      if (mounted) setState(() => _uploadingGallery = false);
     }
   }
 
-  String _withCacheBust(String url) {
-    final joiner = url.contains('?') ? '&' : '?';
-    return '$url${joiner}wmsm_img=${DateTime.now().millisecondsSinceEpoch}';
+  Future<void> _deleteGalleryImage(ProductGalleryImage image) async {
+    if (_product == null || _deletingGallery) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('حذف تصویر گالری'),
+        content: const Text('این تصویر فقط از گالری همین محصول حذف می‌شود. ادامه می‌دهی؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('لغو')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('حذف')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _deletingGallery = true);
+    try {
+      final api = context.read<AuthProvider>().api;
+      await api.deleteProductGalleryImage(id: widget.productId, imageId: image.id);
+
+      final fresh = await api.getProduct(widget.productId);
+      await LocalProductActionStore.markUpdated(widget.productId);
+      final localUpdated = await LocalProductActionStore.applyToProduct(fresh);
+      if (!mounted) return;
+      setState(() {
+        _product = localUpdated;
+        _hasChanged = true;
+      });
+      _showMessage('تصویر از گالری محصول حذف شد.');
+    } on ApiException catch (e) {
+      _showMessage(e.message);
+    } catch (_) {
+      _showMessage('حذف تصویر گالری انجام نشد.');
+    } finally {
+      if (mounted) setState(() => _deletingGallery = false);
+    }
   }
 
   Future<void> _sendToBale() async {
@@ -167,13 +237,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _setCooldown(result.cooldownRemaining);
       await LocalProductActionStore.markBaleSent(widget.productId);
       _hasChanged = true;
-      if (result.product != null) {
-        final localProduct = await LocalProductActionStore.applyToProduct(result.product!);
-        setState(() => _product = localProduct);
-      } else if (_product != null) {
-        final localProduct = await LocalProductActionStore.applyToProduct(_product!);
-        setState(() => _product = localProduct);
-      }
+
+      // بعد از ارسال به بله هم محصول از سرور گرفته می‌شود، ولی رنگ کارت بر اساس اکشن محلی اپ باقی می‌ماند.
+      final fresh = await api.getProduct(widget.productId);
+      final localProduct = await LocalProductActionStore.applyToProduct(fresh);
+      if (mounted) setState(() => _product = localProduct);
+
       _showMessage('${result.message} برای برگشت، ضربدر بالا را بزنید.');
     } on ApiException catch (e) {
       _showMessage(e.message);
@@ -251,6 +320,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             onPressed: () => Navigator.of(context).pop(_hasChanged),
             icon: const Icon(Icons.close_rounded),
           ),
+          actions: [
+            IconButton(
+              tooltip: 'دریافت دوباره از سایت',
+              onPressed: _saving ? null : () => _loadProduct(silent: true),
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
           title: Text(_product?.name ?? widget.productName),
         ),
         body: _buildBody(),
@@ -270,7 +346,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           const SizedBox(height: 90),
           EmptyState(message: _error!, icon: Icons.error_outline),
           const SizedBox(height: 18),
-          ElevatedButton(onPressed: _loadProduct, child: const Text('تلاش دوباره')),
+          ElevatedButton(onPressed: () => _loadProduct(), child: const Text('تلاش دوباره')),
         ],
       );
     }
@@ -285,8 +361,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           children: [
             _ProductHeader(
               product: product,
-              uploadingImage: _uploadingImage,
-              onChangeImage: _changeFeaturedImage,
+              pendingFeaturedImagePath: _pendingFeaturedImagePath,
+              onChangeImage: _pickFeaturedImage,
+            ),
+            const SizedBox(height: 14),
+            _GalleryCard(
+              images: product.galleryImages,
+              uploading: _uploadingGallery,
+              deleting: _deletingGallery,
+              onAdd: _addGalleryImage,
+              onDelete: _deleteGalleryImage,
             ),
             const SizedBox(height: 14),
             _editCard(),
@@ -297,6 +381,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
                   : const Icon(Icons.save_outlined),
               label: Text(_saving ? 'در حال ذخیره...' : 'ذخیره تغییرات'),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'بعد از ذخیره، اطلاعات محصول دوباره از سایت دریافت می‌شود تا کش نشود.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5),
             ),
             const SizedBox(height: 14),
             _baleCard(),
@@ -457,16 +547,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 class _ProductHeader extends StatelessWidget {
   const _ProductHeader({
     required this.product,
-    required this.uploadingImage,
+    required this.pendingFeaturedImagePath,
     required this.onChangeImage,
   });
 
   final Product product;
-  final bool uploadingImage;
+  final String? pendingFeaturedImagePath;
   final VoidCallback onChangeImage;
 
   @override
   Widget build(BuildContext context) {
+    final hasPendingImage = pendingFeaturedImagePath != null && pendingFeaturedImagePath!.isNotEmpty;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -481,14 +572,16 @@ class _ProductHeader extends StatelessWidget {
                     width: 94,
                     height: 94,
                     color: const Color(0xFFFDF2F8),
-                    child: product.imageUrl.isEmpty
-                        ? const Icon(Icons.image_outlined, color: Color(0xFFEC4899), size: 34)
-                        : Image.network(
-                            product.imageUrl,
-                            key: ValueKey(product.imageUrl),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Color(0xFFEC4899), size: 34),
-                          ),
+                    child: hasPendingImage
+                        ? Image.file(File(pendingFeaturedImagePath!), fit: BoxFit.cover)
+                        : product.imageUrl.isEmpty
+                            ? const Icon(Icons.image_outlined, color: Color(0xFFEC4899), size: 34)
+                            : Image.network(
+                                product.imageUrl,
+                                key: ValueKey(product.imageUrl),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Color(0xFFEC4899), size: 34),
+                              ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -512,6 +605,10 @@ class _ProductHeader extends StatelessWidget {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
+                      if (hasPendingImage) ...[
+                        const SizedBox(height: 6),
+                        const Text('تصویر جدید آماده ذخیره است', style: TextStyle(color: Color(0xFFEC4899), fontSize: 12, fontWeight: FontWeight.w900)),
+                      ],
                     ],
                   ),
                 ),
@@ -519,20 +616,174 @@ class _ProductHeader extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             OutlinedButton.icon(
-              onPressed: uploadingImage ? null : onChangeImage,
-              icon: uploadingImage
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.add_photo_alternate_outlined),
-              label: Text(uploadingImage ? 'در حال آپلود تصویر...' : 'تغییر تصویر شاخص'),
+              onPressed: onChangeImage,
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              label: const Text('انتخاب تصویر شاخص'),
             ),
             const SizedBox(height: 6),
             const Text(
-              'تصویر انتخاب‌شده به عنوان تصویر اصلی محصول در ووکامرس ذخیره می‌شود.',
+              'بعد از انتخاب تصویر، برای ثبت در سایت روی «ذخیره تغییرات» بزنید.',
               style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5, height: 1.5),
               textAlign: TextAlign.center,
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _GalleryCard extends StatelessWidget {
+  const _GalleryCard({
+    required this.images,
+    required this.uploading,
+    required this.deleting,
+    required this.onAdd,
+    required this.onDelete,
+  });
+
+  final List<ProductGalleryImage> images;
+  final bool uploading;
+  final bool deleting;
+  final VoidCallback onAdd;
+  final ValueChanged<ProductGalleryImage> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('گالری تصاویر محصول', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                      SizedBox(height: 4),
+                      Text('تصاویر ۱۰۰×۱۰۰ و اسکرول افقی', style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5)),
+                    ],
+                  ),
+                ),
+                IconButton.filledTonal(
+                  tooltip: 'افزودن تصویر گالری',
+                  onPressed: uploading || deleting ? null : onAdd,
+                  icon: uploading
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.add_photo_alternate_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 112,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: images.length + 1,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return _AddGalleryTile(onTap: uploading || deleting ? null : onAdd, uploading: uploading);
+                  }
+                  final image = images[index - 1];
+                  return _GalleryImageTile(
+                    image: image,
+                    disabled: deleting || uploading,
+                    onDelete: () => onDelete(image),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddGalleryTile extends StatelessWidget {
+  const _AddGalleryTile({required this.onTap, required this.uploading});
+
+  final VoidCallback? onTap;
+  final bool uploading;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: 100,
+        height: 100,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFDF2F8),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFBCFE8)),
+        ),
+        child: Center(
+          child: uploading
+              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.add_rounded, color: Color(0xFFEC4899), size: 34),
+        ),
+      ),
+    );
+  }
+}
+
+class _GalleryImageTile extends StatelessWidget {
+  const _GalleryImageTile({required this.image, required this.disabled, required this.onDelete});
+
+  final ProductGalleryImage image;
+  final bool disabled;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 100,
+      height: 100,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 100,
+              height: 100,
+              color: const Color(0xFFFDF2F8),
+              child: image.url.isEmpty
+                  ? const Icon(Icons.image_outlined, color: Color(0xFFEC4899))
+                  : Image.network(
+                      image.url,
+                      key: ValueKey(image.url),
+                      width: 100,
+                      height: 100,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Color(0xFFEC4899)),
+                    ),
+            ),
+          ),
+          Positioned(
+            top: -6,
+            right: -6,
+            child: Material(
+              color: const Color(0xFFE11D48),
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: disabled ? null : onDelete,
+                child: const SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: Icon(Icons.close_rounded, color: Colors.white, size: 18),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
