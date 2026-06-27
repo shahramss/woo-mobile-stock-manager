@@ -950,6 +950,14 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
     }
 
     private function format_product(WC_Product $product): array {
+        $last_action = (string) get_post_meta($product->get_id(), self::LAST_ACTION_META, true);
+        $last_action_at = (string) get_post_meta($product->get_id(), self::LAST_ACTION_AT_META, true);
+
+        if (!$this->is_last_action_recent($last_action_at)) {
+            $last_action = '';
+            $last_action_at = '';
+        }
+
         return [
             'id' => (int) $product->get_id(),
             'name' => $product->get_name(),
@@ -959,9 +967,22 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             'stock_status' => $product->get_stock_status(),
             'image_url' => $this->get_product_image_url($product),
             'bale_cooldown_remaining' => $this->get_bale_cooldown_remaining($product->get_id()),
-            'last_action' => (string) get_post_meta($product->get_id(), self::LAST_ACTION_META, true),
-            'last_action_at' => (string) get_post_meta($product->get_id(), self::LAST_ACTION_AT_META, true),
+            'last_action' => $last_action,
+            'last_action_at' => $last_action_at,
         ];
+    }
+
+    private function is_last_action_recent(string $last_action_at): bool {
+        if ($last_action_at === '') {
+            return false;
+        }
+
+        $timestamp = strtotime($last_action_at);
+        if (!$timestamp) {
+            return false;
+        }
+
+        return $timestamp >= (time() - DAY_IN_SECONDS);
     }
 
     private function set_product_last_action(int $product_id, string $action): void {

@@ -502,7 +502,7 @@ class _ProductCard extends StatelessWidget {
       color: style.background,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: style.border, width: product.lastAction.isEmpty ? 0.7 : 1.4),
+        side: BorderSide(color: style.border, width: product.hasRecentAction ? 1.4 : 0.7),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),

@@ -24,8 +24,16 @@ class Product {
   final String lastActionAt;
 
   bool get isInStock => stockStatus == 'instock';
-  bool get wasUpdatedLast => lastAction == 'updated';
-  bool get wasSentToBaleLast => lastAction == 'bale_sent';
+  bool get hasRecentAction {
+    if (lastAction.isEmpty || lastActionAt.isEmpty) return false;
+    final parsed = DateTime.tryParse(lastActionAt);
+    if (parsed == null) return false;
+    final diff = DateTime.now().toUtc().difference(parsed.toUtc());
+    return !diff.isNegative && diff.inHours < 24;
+  }
+
+  bool get wasUpdatedLast => hasRecentAction && lastAction == 'updated';
+  bool get wasSentToBaleLast => hasRecentAction && lastAction == 'bale_sent';
 
   Product copyWith({
     String? regularPrice,
