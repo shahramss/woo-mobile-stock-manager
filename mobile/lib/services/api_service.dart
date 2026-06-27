@@ -94,6 +94,7 @@ class ApiService {
   Future<ProductPage> getProducts({
     int? categoryId,
     String search = '',
+    String sort = 'newest',
     int page = 1,
     int perPage = 20,
   }) async {
@@ -103,6 +104,7 @@ class ApiService {
         queryParameters: {
           if (categoryId != null && categoryId > 0) 'category_id': categoryId,
           if (search.trim().isNotEmpty) 'search': search.trim(),
+          'sort': sort,
           'page': page,
           'per_page': perPage,
         },

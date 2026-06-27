@@ -8,6 +8,8 @@ class Product {
     required this.stockStatus,
     required this.imageUrl,
     required this.baleCooldownRemaining,
+    required this.lastAction,
+    required this.lastActionAt,
   });
 
   final int id;
@@ -18,8 +20,12 @@ class Product {
   final String stockStatus;
   final String imageUrl;
   final int baleCooldownRemaining;
+  final String lastAction;
+  final String lastActionAt;
 
   bool get isInStock => stockStatus == 'instock';
+  bool get wasUpdatedLast => lastAction == 'updated';
+  bool get wasSentToBaleLast => lastAction == 'bale_sent';
 
   Product copyWith({
     String? regularPrice,
@@ -27,6 +33,8 @@ class Product {
     String? stockStatus,
     String? imageUrl,
     int? baleCooldownRemaining,
+    String? lastAction,
+    String? lastActionAt,
   }) {
     return Product(
       id: id,
@@ -37,6 +45,8 @@ class Product {
       stockStatus: stockStatus ?? this.stockStatus,
       imageUrl: imageUrl ?? this.imageUrl,
       baleCooldownRemaining: baleCooldownRemaining ?? this.baleCooldownRemaining,
+      lastAction: lastAction ?? this.lastAction,
+      lastActionAt: lastActionAt ?? this.lastActionAt,
     );
   }
 
@@ -52,6 +62,8 @@ class Product {
       stockStatus: (json['stock_status'] ?? 'outofstock').toString(),
       imageUrl: (json['image_url'] ?? '').toString(),
       baleCooldownRemaining: int.tryParse((json['bale_cooldown_remaining'] ?? '0').toString()) ?? 0,
+      lastAction: (json['last_action'] ?? '').toString(),
+      lastActionAt: (json['last_action_at'] ?? '').toString(),
     );
   }
 }

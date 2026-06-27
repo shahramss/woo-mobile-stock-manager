@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Modiriat Sari API
- * Description: REST API امن برای اپلیکیشن مدیریت محصولات ووکامرس + ارسال به بله + تغییر تصویر شاخص محصول.
- * Version: 1.4.0
+ * Description: REST API امن برای اپلیکیشن مدیریت محصولات ووکامرس + ارسال به بله + تغییر تصویر شاخص + مرتب‌سازی و وضعیت آخرین اکشن.
+ * Version: 1.5.0
  * Author: شهرام سعیدنیا
  * Text Domain: woo-mobile-stock-manager-api
  */
@@ -22,6 +22,8 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
     private const BALE_JOBS_OPTION = 'wmsm_bale_auto_jobs';
     private const BALE_CRON_HOOK = 'wmsm_bale_auto_send_product';
     private const BALE_COOLDOWN_SECONDS = 3600;
+    private const LAST_ACTION_META = '_wmsm_last_action';
+    private const LAST_ACTION_AT_META = '_wmsm_last_action_at';
 
     private $authorized_user = null;
 
@@ -65,6 +67,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             'args' => [
                 'category_id' => ['required' => false, 'type' => 'integer', 'sanitize_callback' => 'absint'],
                 'search' => ['required' => false, 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field'],
+                'sort' => ['required' => false, 'type' => 'string', 'default' => 'newest', 'sanitize_callback' => 'sanitize_text_field'],
                 'page' => ['required' => false, 'type' => 'integer', 'default' => 1, 'sanitize_callback' => 'absint'],
                 'per_page' => ['required' => false, 'type' => 'integer', 'default' => 20, 'sanitize_callback' => 'absint'],
             ],
@@ -228,16 +231,33 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         $per_page = min(50, max(1, $per_page ?: 20));
         $category_id = absint($request->get_param('category_id'));
         $search = sanitize_text_field((string) $request->get_param('search'));
+        $sort = sanitize_text_field((string) $request->get_param('sort'));
+        if (!in_array($sort, ['newest', 'oldest', 'price_desc', 'price_asc'], true)) {
+            $sort = 'newest';
+        }
 
         $args = [
             'post_type' => 'product',
             'post_status' => ['publish', 'private', 'draft', 'pending'],
             'posts_per_page' => $per_page,
             'paged' => $page,
-            'orderby' => 'title',
-            'order' => 'ASC',
+            'orderby' => 'date',
+            'order' => 'DESC',
             'fields' => 'ids',
         ];
+
+        if ($sort === 'oldest') {
+            $args['orderby'] = 'date';
+            $args['order'] = 'ASC';
+        } elseif ($sort === 'price_desc') {
+            $args['meta_key'] = '_price';
+            $args['orderby'] = 'meta_value_num';
+            $args['order'] = 'DESC';
+        } elseif ($sort === 'price_asc') {
+            $args['meta_key'] = '_price';
+            $args['orderby'] = 'meta_value_num';
+            $args['order'] = 'ASC';
+        }
 
         if ($search !== '') {
             $args['s'] = $search;
@@ -340,6 +360,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
 
         try {
             $product->save();
+            $this->set_product_last_action($product_id, 'updated');
         } catch (Exception $e) {
             return $this->error('wmsm_save_failed', 'ذخیره محصول انجام نشد.', 500);
         }
@@ -400,6 +421,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         try {
             $product->set_image_id((int) $attachment_id);
             $product->save();
+            $this->set_product_last_action($product_id, 'updated');
         } catch (Exception $e) {
             return $this->error('wmsm_image_product_save_failed', 'تصویر آپلود شد اما روی محصول ذخیره نشد.', 500);
         }
@@ -462,6 +484,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         }
 
         $this->set_bale_cooldown($product_id);
+        $this->set_product_last_action($product_id, 'bale_sent');
 
         return rest_ensure_response([
             'message' => 'محصول در کانال بله منتشر شد.',
@@ -570,7 +593,10 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
 
         $product = wc_get_product($product_ids[$index]);
         if ($product instanceof WC_Product) {
-            $this->send_product_post_to_bale($product, (string) ($job['manual_text'] ?? ''), true);
+            $result = $this->send_product_post_to_bale($product, (string) ($job['manual_text'] ?? ''), true);
+            if (!is_wp_error($result)) {
+                $this->set_product_last_action($product->get_id(), 'bale_sent');
+            }
         }
 
         $index++;
@@ -767,8 +793,8 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             'post_type' => 'product',
             'post_status' => 'publish',
             'posts_per_page' => -1,
-            'orderby' => 'title',
-            'order' => 'ASC',
+            'orderby' => 'date',
+            'order' => 'DESC',
             'fields' => 'ids',
             'tax_query' => [[
                 'taxonomy' => 'product_cat',
@@ -933,7 +959,17 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             'stock_status' => $product->get_stock_status(),
             'image_url' => $this->get_product_image_url($product),
             'bale_cooldown_remaining' => $this->get_bale_cooldown_remaining($product->get_id()),
+            'last_action' => (string) get_post_meta($product->get_id(), self::LAST_ACTION_META, true),
+            'last_action_at' => (string) get_post_meta($product->get_id(), self::LAST_ACTION_AT_META, true),
         ];
+    }
+
+    private function set_product_last_action(int $product_id, string $action): void {
+        if (!in_array($action, ['updated', 'bale_sent'], true)) {
+            return;
+        }
+        update_post_meta($product_id, self::LAST_ACTION_META, $action);
+        update_post_meta($product_id, self::LAST_ACTION_AT_META, gmdate('c'));
     }
 
     private function get_product_image_url(WC_Product $product, string $size = 'woocommerce_thumbnail'): string {

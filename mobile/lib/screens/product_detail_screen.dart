@@ -152,6 +152,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         manualText: _baleTextController.text,
       );
       _setCooldown(result.cooldownRemaining);
+      _hasChanged = true;
+      if (_product != null) {
+        setState(() {
+          _product = _product!.copyWith(lastAction: 'bale_sent');
+        });
+      }
       _showMessage(result.message);
     } on ApiException catch (e) {
       _showMessage(e.message);

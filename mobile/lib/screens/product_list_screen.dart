@@ -30,6 +30,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   bool _isLoading = false;
   bool _autoStarting = false;
   String _search = '';
+  String _sort = 'newest';
   String? _error;
 
   @override
@@ -87,6 +88,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
       final result = await api.getProducts(
         categoryId: widget.category?.id,
         search: _search,
+        sort: _sort,
         page: _page,
         perPage: 20,
       );
@@ -233,6 +235,20 @@ class _ProductListScreenState extends State<ProductListScreen> {
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _sortLabel(String value) {
+    switch (value) {
+      case 'price_desc':
+        return 'بیشترین قیمت';
+      case 'price_asc':
+        return 'کمترین قیمت';
+      case 'oldest':
+        return 'قدیمی‌ترین';
+      case 'newest':
+      default:
+        return 'جدیدترین محصول';
+    }
   }
 
   @override
@@ -392,6 +408,45 @@ class _ProductListScreenState extends State<ProductListScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.98),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _sort,
+                isExpanded: true,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                items: const [
+                  DropdownMenuItem(value: 'newest', child: Text('جدیدترین محصولات به قدیمی‌ترین')),
+                  DropdownMenuItem(value: 'oldest', child: Text('قدیمی‌ترین محصولات به جدیدترین')),
+                  DropdownMenuItem(value: 'price_desc', child: Text('بیشترین قیمت به کمتر')),
+                  DropdownMenuItem(value: 'price_asc', child: Text('کمترین قیمت به بیشتر')),
+                ],
+                onChanged: (value) {
+                  if (value == null || value == _sort) return;
+                  setState(() => _sort = value);
+                  _loadProducts(refresh: true);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.sort_rounded, color: Colors.white, size: 18),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'مرتب‌سازی فعلی: ${_sortLabel(_sort)}',
+                  style: const TextStyle(color: Color(0xFFE0F2FE), fontSize: 12.5, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
           if (widget.category != null) ...[
             const SizedBox(height: 12),
             Row(
@@ -441,7 +496,14 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = _actionStyle(product);
+
     return Card(
+      color: style.background,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: style.border, width: product.lastAction.isEmpty ? 0.7 : 1.4),
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
@@ -455,11 +517,21 @@ class _ProductCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      product.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                    Row(
+                      children: [
+                        if (style.label.isNotEmpty) ...[
+                          _ActionBadge(label: style.label, color: style.badgeColor),
+                          const SizedBox(width: 7),
+                        ],
+                        Expanded(
+                          child: Text(
+                            product.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -484,6 +556,67 @@ class _ProductCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  _ProductActionStyle _actionStyle(Product product) {
+    if (product.wasSentToBaleLast) {
+      return const _ProductActionStyle(
+        background: Color(0xFFF0FDF4),
+        border: Color(0xFF86EFAC),
+        badgeColor: Color(0xFF16A34A),
+        label: 'ارسال بله',
+      );
+    }
+    if (product.wasUpdatedLast) {
+      return const _ProductActionStyle(
+        background: Color(0xFFEFF6FF),
+        border: Color(0xFF93C5FD),
+        badgeColor: Color(0xFF2563EB),
+        label: 'بروزرسانی',
+      );
+    }
+    return const _ProductActionStyle(
+      background: Colors.white,
+      border: Color(0xFFE2E8F0),
+      badgeColor: Color(0xFF64748B),
+      label: '',
+    );
+  }
+}
+
+class _ProductActionStyle {
+  const _ProductActionStyle({
+    required this.background,
+    required this.border,
+    required this.badgeColor,
+    required this.label,
+  });
+
+  final Color background;
+  final Color border;
+  final Color badgeColor;
+  final String label;
+}
+
+class _ActionBadge extends StatelessWidget {
+  const _ActionBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900),
       ),
     );
   }
