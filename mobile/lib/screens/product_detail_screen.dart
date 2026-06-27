@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../models/product.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/local_product_action_store.dart';
 import '../widgets/empty_state.dart';
 import 'bale_settings_screen.dart';
 
@@ -89,15 +90,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         stockStatus: _inStock ? 'instock' : 'outofstock',
       );
 
+      await LocalProductActionStore.markUpdated(widget.productId);
+      final localUpdated = await LocalProductActionStore.applyToProduct(updated);
+
       setState(() {
-        _product = updated;
+        _product = localUpdated;
         _hasChanged = true;
       });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تغییرات ذخیره شد')),
-      );
-      Navigator.of(context).pop(true);
+      _showMessage('تغییرات ذخیره شد. برای برگشت، ضربدر بالا را بزنید.');
     } on ApiException catch (e) {
       _showMessage(e.message);
     } catch (_) {
@@ -126,8 +126,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         imagePath: picked.path,
       );
 
+      await LocalProductActionStore.markUpdated(widget.productId);
+      final localUpdated = await LocalProductActionStore.applyToProduct(updated);
       setState(() {
-        _product = updated;
+        _product = localUpdated;
         _hasChanged = true;
       });
       _showMessage('تصویر شاخص محصول تغییر کرد.');
@@ -152,23 +154,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         manualText: _baleTextController.text,
       );
       _setCooldown(result.cooldownRemaining);
+      await LocalProductActionStore.markBaleSent(widget.productId);
       _hasChanged = true;
-      setState(() {
-        if (result.product != null) {
-          // محصول تازه از سایت برمی‌گردد؛ اگر قبلاً بروزرسانی شده باشد و حالا به بله ارسال شود، وضعیت both فعال می‌شود.
-          _product = result.product;
-        } else if (_product != null) {
-          final now = DateTime.now().toUtc().toIso8601String();
-          final hadRecentUpdate = _product!.wasUpdatedRecent;
-          _product = _product!.copyWith(
-            lastAction: 'bale_sent',
-            lastActionAt: now,
-            baleSentActionAt: now,
-            actionState: hadRecentUpdate ? 'both' : 'bale_sent',
-          );
-        }
-      });
-      _showMessage(result.message);
+      if (result.product != null) {
+        final localProduct = await LocalProductActionStore.applyToProduct(result.product!);
+        setState(() => _product = localProduct);
+      } else if (_product != null) {
+        final localProduct = await LocalProductActionStore.applyToProduct(_product!);
+        setState(() => _product = localProduct);
+      }
+      _showMessage('${result.message} برای برگشت، ضربدر بالا را بزنید.');
     } on ApiException catch (e) {
       _showMessage(e.message);
     } catch (_) {
@@ -238,7 +233,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         return false;
       },
       child: Scaffold(
-        appBar: AppBar(title: Text(_product?.name ?? widget.productName)),
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leading: IconButton(
+            tooltip: 'بستن',
+            onPressed: () => Navigator.of(context).pop(_hasChanged),
+            icon: const Icon(Icons.close_rounded),
+          ),
+          title: Text(_product?.name ?? widget.productName),
+        ),
         body: _buildBody(),
       ),
     );

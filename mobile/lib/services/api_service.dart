@@ -4,6 +4,7 @@ import '../models/login_result.dart';
 import '../models/bale.dart';
 import '../models/product.dart';
 import '../models/product_category.dart';
+import '../models/order.dart';
 
 class ApiException implements Exception {
   ApiException(this.message);
@@ -248,6 +249,40 @@ class ApiService {
         data: {'category_id': categoryId},
       );
       return (response.data?['message'] ?? 'ارسال خودکار متوقف شد.').toString();
+    } on DioException catch (e) {
+      throw ApiException(_readDioError(e));
+    }
+  }
+
+
+  Future<OrderPage> getOrders({
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/orders',
+        queryParameters: {
+          'page': page,
+          'per_page': perPage,
+        },
+      );
+      final data = response.data ?? {};
+      final itemsJson = (data['items'] as List<dynamic>? ?? []);
+      return OrderPage(
+        items: itemsJson.whereType<Map<String, dynamic>>().map(OrderSummary.fromJson).toList(),
+        page: int.tryParse((data['page'] ?? page).toString()) ?? page,
+        totalPages: int.tryParse((data['total_pages'] ?? page).toString()) ?? page,
+      );
+    } on DioException catch (e) {
+      throw ApiException(_readDioError(e));
+    }
+  }
+
+  Future<OrderDetail> getOrder(int id) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>('/orders/$id');
+      return OrderDetail.fromJson(response.data ?? {});
     } on DioException catch (e) {
       throw ApiException(_readDioError(e));
     }

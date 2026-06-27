@@ -7,6 +7,7 @@ import '../models/product.dart';
 import '../models/product_category.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/local_product_action_store.dart';
 import '../widgets/empty_state.dart';
 import 'product_detail_screen.dart';
 
@@ -92,8 +93,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
         page: _page,
         perPage: 20,
       );
+      final localItems = await LocalProductActionStore.applyToProducts(result.items);
       setState(() {
-        _products.addAll(result.items);
+        _products.addAll(localItems);
         _hasMore = result.hasMore;
         _page += 1;
       });

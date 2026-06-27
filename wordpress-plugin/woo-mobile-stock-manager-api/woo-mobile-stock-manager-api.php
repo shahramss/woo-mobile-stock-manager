@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Modiriat Sari API
- * Description: REST API امن برای اپلیکیشن مدیریت محصولات ووکامرس + ارسال به بله + تغییر تصویر شاخص + مرتب‌سازی، گرادیانت اکشن‌ها و موجودی بدون محدودیت.
- * Version: 1.7.0
+ * Description: REST API امن برای اپلیکیشن مدیریت محصولات ووکامرس + سفارشات + ارسال به بله + تغییر تصویر شاخص + رنگ محلی اپ.
+ * Version: 1.8.0
  * Author: شهرام سعیدنیا
  * Text Domain: woo-mobile-stock-manager-api
  */
@@ -90,6 +90,23 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             ],
         ]);
 
+
+        register_rest_route(self::NAMESPACE, '/orders', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_orders'],
+            'permission_callback' => [$this, 'can_access'],
+            'args' => [
+                'page' => ['required' => false, 'type' => 'integer', 'default' => 1, 'sanitize_callback' => 'absint'],
+                'per_page' => ['required' => false, 'type' => 'integer', 'default' => 20, 'sanitize_callback' => 'absint'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/orders/(?P<id>\d+)', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_order'],
+            'permission_callback' => [$this, 'can_access'],
+            'args' => ['id' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint']],
+        ]);
 
         register_rest_route(self::NAMESPACE, '/products/(?P<id>\d+)/featured-image', [
             'methods' => WP_REST_Server::CREATABLE,
@@ -628,6 +645,62 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         wp_schedule_single_event($next_run, self::BALE_CRON_HOOK, [$category_id]);
     }
 
+
+    public function get_orders(WP_REST_Request $request) {
+        $wc_error = $this->ensure_woocommerce();
+        if (is_wp_error($wc_error)) {
+            return $wc_error;
+        }
+
+        if (!function_exists('wc_get_orders')) {
+            return $this->error('wmsm_orders_unavailable', 'امکان دریافت سفارش‌ها در این نسخه ووکامرس در دسترس نیست.', 500);
+        }
+
+        $page = max(1, absint($request->get_param('page')));
+        $per_page = absint($request->get_param('per_page'));
+        $per_page = min(50, max(1, $per_page ?: 20));
+
+        $result = wc_get_orders([
+            'limit' => $per_page,
+            'page' => $page,
+            'paginate' => true,
+            'orderby' => 'date',
+            'order' => 'DESC',
+            'return' => 'objects',
+        ]);
+
+        $orders = is_object($result) && isset($result->orders) ? $result->orders : [];
+        $items = [];
+        foreach ($orders as $order) {
+            if ($order instanceof WC_Order) {
+                $items[] = $this->format_order_summary($order);
+            }
+        }
+
+        return rest_ensure_response([
+            'items' => $items,
+            'page' => $page,
+            'per_page' => $per_page,
+            'total' => is_object($result) && isset($result->total) ? (int) $result->total : count($items),
+            'total_pages' => is_object($result) && isset($result->max_num_pages) ? (int) $result->max_num_pages : $page,
+        ]);
+    }
+
+    public function get_order(WP_REST_Request $request) {
+        $wc_error = $this->ensure_woocommerce();
+        if (is_wp_error($wc_error)) {
+            return $wc_error;
+        }
+
+        $order_id = absint($request['id']);
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return $this->error('wmsm_order_not_found', 'سفارش پیدا نشد.', 404);
+        }
+
+        return rest_ensure_response($this->format_order_detail($order));
+    }
+
     public function can_access(WP_REST_Request $request) {
         $wc_error = $this->ensure_woocommerce();
         if (is_wp_error($wc_error)) {
@@ -961,6 +1034,84 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             return $this->error('wmsm_woocommerce_missing', 'ووکامرس نصب یا فعال نیست.', 500);
         }
         return true;
+    }
+
+
+    private function format_order_summary(WC_Order $order): array {
+        return [
+            'id' => (int) $order->get_id(),
+            'number' => (string) $order->get_order_number(),
+            'status' => (string) $order->get_status(),
+            'status_label' => wc_get_order_status_name($order->get_status()),
+            'date_created' => $order->get_date_created() ? $order->get_date_created()->date('c') : '',
+            'total' => $this->format_plain_amount($order->get_total()),
+            'payment_method_title' => $order->get_payment_method_title(),
+            'customer_name' => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()),
+            'phone' => $order->get_billing_phone(),
+        ];
+    }
+
+    private function format_order_detail(WC_Order $order): array {
+        $items = [];
+        foreach ($order->get_items() as $item) {
+            if (!$item instanceof WC_Order_Item_Product) {
+                continue;
+            }
+            $product = $item->get_product();
+            $qty = max(1, (int) $item->get_quantity());
+            $total = (float) $item->get_total();
+            $items[] = [
+                'product_id' => $product ? (int) $product->get_id() : (int) $item->get_product_id(),
+                'name' => $item->get_name(),
+                'quantity' => $qty,
+                'total' => $this->format_plain_amount($total),
+                'price' => $this->format_plain_amount($total / $qty),
+                'image_url' => $product instanceof WC_Product ? $this->get_product_image_url($product) : '',
+            ];
+        }
+
+        return array_merge($this->format_order_summary($order), [
+            'shipping_total' => $this->format_plain_amount($order->get_shipping_total()),
+            'address' => $this->get_order_address_text($order),
+            'postcode' => $this->get_order_postcode($order),
+            'items' => $items,
+        ]);
+    }
+
+    private function get_order_address_text(WC_Order $order): string {
+        $parts = [];
+        $shipping_parts = [
+            $order->get_shipping_state(),
+            $order->get_shipping_city(),
+            $order->get_shipping_address_1(),
+            $order->get_shipping_address_2(),
+        ];
+        $billing_parts = [
+            $order->get_billing_state(),
+            $order->get_billing_city(),
+            $order->get_billing_address_1(),
+            $order->get_billing_address_2(),
+        ];
+        $raw = array_filter(array_map('trim', $shipping_parts));
+        if (empty($raw)) {
+            $raw = array_filter(array_map('trim', $billing_parts));
+        }
+        foreach ($raw as $part) {
+            $parts[] = $part;
+        }
+        return implode('، ', $parts);
+    }
+
+    private function get_order_postcode(WC_Order $order): string {
+        $postcode = trim((string) $order->get_shipping_postcode());
+        if ($postcode === '') {
+            $postcode = trim((string) $order->get_billing_postcode());
+        }
+        return $postcode;
+    }
+
+    private function format_plain_amount($amount): string {
+        return number_format((float) $amount, 0, '.', ',');
     }
 
     private function format_product(WC_Product $product): array {

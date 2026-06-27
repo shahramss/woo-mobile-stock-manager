@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../widgets/empty_state.dart';
 import 'product_list_screen.dart';
 import 'bale_settings_screen.dart';
+import 'orders_screen.dart';
 
 class CategoryListScreen extends StatefulWidget {
   const CategoryListScreen({super.key});
@@ -69,6 +70,14 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const BaleSettingsScreen(),
+      ),
+    );
+  }
+
+  void _openOrders() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const OrdersScreen(),
       ),
     );
   }
@@ -187,6 +196,11 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                tooltip: 'سفارشات',
+                onPressed: _openOrders,
+                icon: const Icon(Icons.receipt_long_rounded, color: Colors.white),
               ),
               IconButton(
                 tooltip: 'تنظیمات بله',
