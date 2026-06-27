@@ -575,11 +575,11 @@ class _ProductCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.centerRight,
           end: Alignment.centerLeft,
-          colors: [Color(0xFFEFF6FF), Color(0xFFF0FDF4)],
+          colors: [Color(0xFFDBEAFE), Color(0xFFD1FAE5)],
         ),
-        border: Color(0xFF38BDF8),
-        badgeColor: Color(0xFF0891B2),
-        label: 'بروزرسانی + بله',
+        border: Color(0xFF10B981),
+        badgeColor: Color(0xFF0F766E),
+        label: 'بروزرسانی + ارسال بله',
       );
     }
     if (product.wasSentToBaleLast) {

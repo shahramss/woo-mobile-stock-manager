@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Modiriat Sari API
  * Description: REST API امن برای اپلیکیشن مدیریت محصولات ووکامرس + ارسال به بله + تغییر تصویر شاخص + مرتب‌سازی، گرادیانت اکشن‌ها و موجودی بدون محدودیت.
- * Version: 1.6.0
+ * Version: 1.7.0
  * Author: شهرام سعیدنیا
  * Text Domain: woo-mobile-stock-manager-api
  */
@@ -496,9 +496,13 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         $this->set_bale_cooldown($product_id);
         $this->set_product_last_action($product_id, 'bale_sent');
 
+        // محصول بعد از ثبت اکشن برگردانده می‌شود تا اپ همان لحظه رنگ گرادیانت را درست نمایش بدهد.
+        $fresh_product = wc_get_product($product_id);
+
         return rest_ensure_response([
             'message' => 'محصول در کانال بله منتشر شد.',
             'cooldown_remaining' => self::BALE_COOLDOWN_SECONDS,
+            'product' => $fresh_product ? $this->format_product($fresh_product) : null,
         ]);
     }
 
@@ -976,6 +980,16 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             $bale_sent_action_at = '';
         }
 
+        // وضعیت نهایی رنگ کارت در اپ. اگر هر دو اکشن در ۲۴ ساعت اخیر باشند، both می‌شود.
+        $action_state = 'none';
+        if ($updated_action_at !== '' && $bale_sent_action_at !== '') {
+            $action_state = 'both';
+        } elseif ($updated_action_at !== '') {
+            $action_state = 'updated';
+        } elseif ($bale_sent_action_at !== '') {
+            $action_state = 'bale_sent';
+        }
+
         return [
             'id' => (int) $product->get_id(),
             'name' => $product->get_name(),
@@ -989,6 +1003,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             'last_action_at' => $last_action_at,
             'updated_action_at' => $updated_action_at,
             'bale_sent_action_at' => $bale_sent_action_at,
+            'action_state' => $action_state,
         ];
     }
 

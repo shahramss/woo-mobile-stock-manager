@@ -153,15 +153,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       );
       _setCooldown(result.cooldownRemaining);
       _hasChanged = true;
-      if (_product != null) {
-        setState(() {
+      setState(() {
+        if (result.product != null) {
+          // محصول تازه از سایت برمی‌گردد؛ اگر قبلاً بروزرسانی شده باشد و حالا به بله ارسال شود، وضعیت both فعال می‌شود.
+          _product = result.product;
+        } else if (_product != null) {
+          final now = DateTime.now().toUtc().toIso8601String();
+          final hadRecentUpdate = _product!.wasUpdatedRecent;
           _product = _product!.copyWith(
             lastAction: 'bale_sent',
-            lastActionAt: DateTime.now().toUtc().toIso8601String(),
-            baleSentActionAt: DateTime.now().toUtc().toIso8601String(),
+            lastActionAt: now,
+            baleSentActionAt: now,
+            actionState: hadRecentUpdate ? 'both' : 'bale_sent',
           );
-        });
-      }
+        }
+      });
       _showMessage(result.message);
     } on ApiException catch (e) {
       _showMessage(e.message);

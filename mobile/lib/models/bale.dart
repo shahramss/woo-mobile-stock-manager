@@ -1,3 +1,5 @@
+import 'product.dart';
+
 class BaleSettings {
   BaleSettings({
     required this.hasBotToken,
@@ -23,15 +25,18 @@ class BaleSettings {
 }
 
 class BaleSendResult {
-  BaleSendResult({required this.message, required this.cooldownRemaining});
+  BaleSendResult({required this.message, required this.cooldownRemaining, this.product});
 
   final String message;
   final int cooldownRemaining;
+  final Product? product;
 
   factory BaleSendResult.fromJson(Map<String, dynamic> json) {
+    final productJson = json['product'];
     return BaleSendResult(
       message: (json['message'] ?? 'محصول در کانال بله منتشر شد.').toString(),
       cooldownRemaining: int.tryParse((json['cooldown_remaining'] ?? '0').toString()) ?? 0,
+      product: productJson is Map<String, dynamic> ? Product.fromJson(productJson) : null,
     );
   }
 }
