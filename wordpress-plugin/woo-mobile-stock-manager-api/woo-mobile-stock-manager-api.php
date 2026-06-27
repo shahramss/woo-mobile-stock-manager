@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Woo Mobile Stock Manager API
- * Description: REST API امن برای اپلیکیشن موبایل مدیریت محصولات ووکامرس + ارسال محصول به کانال بله.
- * Version: 1.2.0
+ * Description: REST API امن برای اپلیکیشن موبایل مدیریت محصولات ووکامرس + ارسال محصول به کانال بله با دکمه سفارش.
+ * Version: 1.3.0
  * Author: شهرام سعیدنیا
  * Text Domain: woo-mobile-stock-manager-api
  */
@@ -552,19 +552,32 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         $chat_id = $this->get_bale_chat_id();
         $caption = $this->build_bale_caption($product, $manual_text);
         $image_url = $this->get_product_image_url($product, 'full');
+        $reply_markup = $this->build_bale_order_button($product);
 
         if ($image_url !== '') {
-            return $this->call_bale_api('sendPhoto', [
+            $payload = [
                 'chat_id' => $chat_id,
                 'photo' => $image_url,
                 'caption' => $this->limit_text($caption, 3900),
-            ], $token);
+            ];
+
+            if (!empty($reply_markup)) {
+                $payload['reply_markup'] = $reply_markup;
+            }
+
+            return $this->call_bale_api('sendPhoto', $payload, $token);
         }
 
-        return $this->call_bale_api('sendMessage', [
+        $payload = [
             'chat_id' => $chat_id,
             'text' => $this->limit_text($caption, 3900),
-        ], $token);
+        ];
+
+        if (!empty($reply_markup)) {
+            $payload['reply_markup'] = $reply_markup;
+        }
+
+        return $this->call_bale_api('sendMessage', $payload, $token);
     }
 
     private function call_bale_api(string $method, array $payload, string $token) {
@@ -617,12 +630,25 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             $parts[] = '💰 قیمت: ' . wc_price($price, ['currency' => get_woocommerce_currency()]);
         }
 
+        return wp_strip_all_tags(implode("\n\n", $parts));
+    }
+
+    private function build_bale_order_button(WC_Product $product): array {
         $permalink = get_permalink($product->get_id());
-        if ($permalink) {
-            $parts[] = '🔗 لینک محصول: ' . $permalink;
+        if (!$permalink) {
+            return [];
         }
 
-        return wp_strip_all_tags(implode("\n\n", $parts));
+        return [
+            'inline_keyboard' => [
+                [
+                    [
+                        'text' => '🛒 سفارش محصول',
+                        'url' => esc_url_raw($permalink),
+                    ],
+                ],
+            ],
+        ];
     }
 
     private function get_product_attributes_text(WC_Product $product): string {
