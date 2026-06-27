@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Modiriat Sari API
- * Description: REST API امن برای اپلیکیشن مدیریت سریع: محصولات، سفارشات، بله، تصویر شاخص مستقل و گالری محصول.
- * Version: 2.0.0
+ * Description: REST API امن برای اپلیکیشن مدیریت سریع: محصولات، سفارشات، بله، تصویر شاخص، گالری محصول و پاک‌سازی کش LiteSpeed پس از بروزرسانی محصول.
+ * Version: 2.1.0
  * Author: شهرام سعیدنیا
  * Text Domain: woo-mobile-stock-manager-api
  */
@@ -407,8 +407,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
 
         try {
             $product->save();
-            clean_post_cache($product_id);
-            wc_delete_product_transients($product_id);
+            $this->purge_product_cache($product_id);
             $this->set_product_last_action($product_id, 'updated');
             $fresh_product = wc_get_product($product_id);
         } catch (Exception $e) {
@@ -471,8 +470,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         try {
             $product->set_image_id((int) $attachment_id);
             $product->save();
-            clean_post_cache($product_id);
-            wc_delete_product_transients($product_id);
+            $this->purge_product_cache($product_id);
             $this->set_product_last_action($product_id, 'updated');
             $fresh_product = wc_get_product($product_id);
         } catch (Exception $e) {
@@ -511,8 +509,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             }
             $product->set_gallery_image_ids($gallery_ids);
             $product->save();
-            clean_post_cache($product_id);
-            wc_delete_product_transients($product_id);
+            $this->purge_product_cache($product_id);
             $this->set_product_last_action($product_id, 'updated');
             $fresh_product = wc_get_product($product_id);
         } catch (Exception $e) {
@@ -550,8 +547,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             $gallery_ids = array_values(array_diff($gallery_ids, [$image_id]));
             $product->set_gallery_image_ids($gallery_ids);
             $product->save();
-            clean_post_cache($product_id);
-            wc_delete_product_transients($product_id);
+            $this->purge_product_cache($product_id);
             $this->set_product_last_action($product_id, 'updated');
             $fresh_product = wc_get_product($product_id);
         } catch (Exception $e) {
@@ -1217,6 +1213,49 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
 
     private function format_plain_amount($amount): string {
         return number_format((float) $amount, 0, '.', ',');
+    }
+
+    /**
+     * پاک‌سازی کش محصول پس از هر تغییر از داخل اپ.
+     * این متد علاوه بر کش ووکامرس/وردپرس، در صورت نصب بودن LiteSpeed Cache،
+     * کش همان صفحه محصول را هم پاک می‌کند تا تغییرات قیمت/موجودی/تصویر سریع دیده شود.
+     */
+    private function purge_product_cache(int $product_id): void {
+        $product_id = absint($product_id);
+        if ($product_id <= 0) {
+            return;
+        }
+
+        clean_post_cache($product_id);
+
+        if (function_exists('wc_delete_product_transients')) {
+            wc_delete_product_transients($product_id);
+        }
+
+        $permalink = get_permalink($product_id);
+
+        // LiteSpeed Cache: روش رسمی/سازگار با نسخه‌های مختلف افزونه.
+        if (class_exists('LiteSpeed_Cache_API')) {
+            if (method_exists('LiteSpeed_Cache_API', 'purge_post')) {
+                LiteSpeed_Cache_API::purge_post($product_id);
+            }
+
+            // در بعضی نسخه‌ها purge با تگ بهتر عمل می‌کند؛ اگر وجود داشت اجرا می‌شود.
+            if (method_exists('LiteSpeed_Cache_API', 'purge')) {
+                LiteSpeed_Cache_API::purge('post-' . $product_id);
+                LiteSpeed_Cache_API::purge('product-' . $product_id);
+            }
+        }
+
+        // اگر افزونه LiteSpeed از هوک‌ها استفاده کند، این‌ها صفحه همان محصول را purge می‌کنند.
+        do_action('litespeed_purge_post', $product_id);
+        if ($permalink) {
+            do_action('litespeed_purge_url', $permalink);
+        }
+
+        // پاک‌سازی‌های عمومی ووکامرس برای لیست‌ها/تک‌محصول.
+        do_action('woocommerce_delete_product_transients', $product_id);
+        do_action('wmsm_product_updated_purge_cache', $product_id);
     }
 
     private function format_product(WC_Product $product): array {
