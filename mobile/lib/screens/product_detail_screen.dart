@@ -336,13 +336,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                color: const Color(0xFFFFF7FB),
+                border: Border.all(color: const Color(0xFFFBCFE8)),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_outline, color: Color(0xFF2563EB)),
+                  const Icon(Icons.check_circle_outline, color: Color(0xFFEC4899)),
                   const SizedBox(width: 10),
                   const Expanded(child: Text('وضعیت موجودی', style: TextStyle(fontWeight: FontWeight.w800))),
                   Text(_inStock ? 'موجود' : 'ناموجود'),
@@ -371,10 +371,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
+                    color: const Color(0xFFFDF2F8),
                     borderRadius: BorderRadius.circular(15),
                   ),
-                  child: const Icon(Icons.campaign_rounded, color: Color(0xFF2563EB)),
+                  child: const Icon(Icons.campaign_rounded, color: Color(0xFFEC4899)),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
@@ -460,14 +460,14 @@ class _ProductHeader extends StatelessWidget {
                   child: Container(
                     width: 94,
                     height: 94,
-                    color: const Color(0xFFEFF6FF),
+                    color: const Color(0xFFFDF2F8),
                     child: product.imageUrl.isEmpty
-                        ? const Icon(Icons.image_outlined, color: Color(0xFF2563EB), size: 34)
+                        ? const Icon(Icons.image_outlined, color: Color(0xFFEC4899), size: 34)
                         : Image.network(
                             product.imageUrl,
                             key: ValueKey(product.imageUrl),
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Color(0xFF2563EB), size: 34),
+                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Color(0xFFEC4899), size: 34),
                           ),
                   ),
                 ),
@@ -482,7 +482,7 @@ class _ProductHeader extends StatelessWidget {
                         product.name,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF311124)),
                       ),
                       const SizedBox(height: 8),
                       Text(

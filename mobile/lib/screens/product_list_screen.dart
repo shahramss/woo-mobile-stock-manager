@@ -324,13 +324,13 @@ class _ProductListScreenState extends State<ProductListScreen> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         gradient: const LinearGradient(
-          colors: [Color(0xFF1E40AF), Color(0xFF60A5FA)],
+          colors: [Color(0xFFDB2777), Color(0xFFF9A8D4)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1D4ED8).withOpacity(0.18),
+            color: const Color(0xFFDB2777).withOpacity(0.18),
             blurRadius: 22,
             offset: const Offset(0, 12),
           ),
@@ -352,7 +352,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   children: [
                     const Text(
                       'لیست محصولات',
-                      style: TextStyle(color: Color(0xFFE0F2FE), fontSize: 12.5, fontWeight: FontWeight.w700),
+                      style: TextStyle(color: Color(0xFFFCE7F3), fontSize: 12.5, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -442,7 +442,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
               Expanded(
                 child: Text(
                   'مرتب‌سازی فعلی: ${_sortLabel(_sort)}',
-                  style: const TextStyle(color: Color(0xFFE0F2FE), fontSize: 12.5, fontWeight: FontWeight.w800),
+                  style: const TextStyle(color: Color(0xFFFCE7F3), fontSize: 12.5, fontWeight: FontWeight.w800),
                 ),
               ),
             ],
@@ -656,13 +656,13 @@ class _ProductImage extends StatelessWidget {
       child: Container(
         width: 72,
         height: 72,
-        color: const Color(0xFFEFF6FF),
+        color: const Color(0xFFFDF2F8),
         child: imageUrl.isEmpty
-            ? const Icon(Icons.image_not_supported_outlined, color: Color(0xFF2563EB), size: 30)
+            ? const Icon(Icons.image_not_supported_outlined, color: Color(0xFFEC4899), size: 30)
             : Image.network(
                 imageUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Color(0xFF2563EB), size: 30),
+                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Color(0xFFEC4899), size: 30),
               ),
       ),
     );

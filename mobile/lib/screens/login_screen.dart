@@ -94,11 +94,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       gradient: const LinearGradient(
                         begin: Alignment.topRight,
                         end: Alignment.bottomLeft,
-                        colors: [Color(0xFF60A5FA), Color(0xFF2563EB)],
+                        colors: [Color(0xFFF9A8D4), Color(0xFFEC4899)],
                       ),
                       boxShadow: const [
                         BoxShadow(
-                          color: Color(0x332563EB),
+                          color: Color(0x33EC4899),
                           blurRadius: 18,
                           offset: Offset(0, 10),
                         ),
@@ -110,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Text(
                     'مدیریت سریع',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF311124)),
                   ),
                   const SizedBox(height: 8),
                   const Text(
@@ -187,8 +187,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 label: const Text('ورود با اثر انگشت'),
                                 style: OutlinedButton.styleFrom(
                                   minimumSize: const Size.fromHeight(50),
-                                  side: const BorderSide(color: Color(0xFF2563EB)),
-                                  foregroundColor: const Color(0xFF2563EB),
+                                  side: const BorderSide(color: Color(0xFFEC4899)),
+                                  foregroundColor: const Color(0xFFEC4899),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 ),
                               ),

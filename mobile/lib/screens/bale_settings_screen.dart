@@ -132,10 +132,10 @@ class _BaleSettingsScreenState extends State<BaleSettingsScreen> {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
+                          color: const Color(0xFFFDF2F8),
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: const Icon(Icons.campaign_rounded, color: Color(0xFF2563EB)),
+                        child: const Icon(Icons.campaign_rounded, color: Color(0xFFEC4899)),
                       ),
                       const SizedBox(width: 12),
                       Expanded(

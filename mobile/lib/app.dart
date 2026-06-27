@@ -24,15 +24,15 @@ class WooMobileStockManagerApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Roboto',
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2563EB),
+          seedColor: const Color(0xFFEC4899),
           brightness: Brightness.light,
         ),
-        scaffoldBackgroundColor: const Color(0xFFF4F7FB),
+        scaffoldBackgroundColor: const Color(0xFFFFF7FB),
         appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 0,
-          backgroundColor: Color(0xFFF4F7FB),
-          foregroundColor: Color(0xFF0F172A),
+          backgroundColor: Color(0xFFFFF7FB),
+          foregroundColor: Color(0xFF311124),
         ),
         cardTheme: CardTheme(
           elevation: 0,
@@ -44,22 +44,22 @@ class WooMobileStockManagerApp extends StatelessWidget {
           fillColor: Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            borderSide: const BorderSide(color: Color(0xFFFBCFE8)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            borderSide: const BorderSide(color: Color(0xFFFBCFE8)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.4),
+            borderSide: const BorderSide(color: Color(0xFFEC4899), width: 1.4),
           ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             minimumSize: const Size.fromHeight(52),
-            backgroundColor: const Color(0xFF2563EB),
+            backgroundColor: const Color(0xFFEC4899),
             foregroundColor: Colors.white,
             elevation: 0,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

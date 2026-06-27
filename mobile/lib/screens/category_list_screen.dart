@@ -145,13 +145,13 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         gradient: const LinearGradient(
-          colors: [Color(0xFF1D4ED8), Color(0xFF38BDF8)],
+          colors: [Color(0xFFDB2777), Color(0xFFF9A8D4)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1D4ED8).withOpacity(0.20),
+            color: const Color(0xFFDB2777).withOpacity(0.20),
             blurRadius: 22,
             offset: const Offset(0, 12),
           ),
@@ -183,7 +183,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
                     SizedBox(height: 4),
                     Text(
                       'مدیریت قیمت، موجودی و ارسال محصول',
-                      style: TextStyle(color: Color(0xFFE0F2FE), fontSize: 12.5, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: Color(0xFFFCE7F3), fontSize: 12.5, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -224,7 +224,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
           const SizedBox(height: 10),
           const Text(
             'طراحی و ساخت: شهرام سعیدنیا | پروژه: آقای رنجبر و جناب سجادی',
-            style: TextStyle(color: Color(0xFFE0F2FE), fontSize: 11.5, fontWeight: FontWeight.w600),
+            style: TextStyle(color: Color(0xFFFCE7F3), fontSize: 11.5, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -322,10 +322,10 @@ class _CategoryIcon extends StatelessWidget {
       width: 52,
       height: 52,
       decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
+        color: const Color(0xFFFDF2F8),
         borderRadius: BorderRadius.circular(18),
       ),
-      child: Icon(icon, color: const Color(0xFF2563EB)),
+      child: Icon(icon, color: const Color(0xFFEC4899)),
     );
   }
 }
