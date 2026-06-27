@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -24,6 +25,8 @@ class OrderDetailScreen extends StatefulWidget {
 }
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
+  static const MethodChannel _galleryChannel = MethodChannel('modiriat_sari/gallery');
+
   final GlobalKey _invoiceKey = GlobalKey();
   OrderDetail? _order;
   bool _loading = true;
@@ -55,24 +58,52 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  Future<Uint8List> _createInvoiceBytes() async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final boundary = _invoiceKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null) throw Exception('invoice boundary not found');
+    final ui.Image image = await boundary.toImage(pixelRatio: 3);
+    final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    final bytes = byteData?.buffer.asUint8List();
+    if (bytes == null || bytes.isEmpty) throw Exception('empty png');
+    return bytes;
+  }
+
+  String _invoiceFileName() {
+    final safeNumber = (_order?.number ?? widget.orderNumber).replaceAll(RegExp(r'[^0-9A-Za-z\-_]'), '-');
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    return 'factor-$safeNumber-$stamp.png';
+  }
+
+  Future<void> _saveInvoiceToGallery() async {
+    if (_order == null || _creatingInvoice) return;
+    setState(() => _creatingInvoice = true);
+    try {
+      final bytes = await _createInvoiceBytes();
+      await _galleryChannel.invokeMethod<String>('savePngToGallery', {
+        'bytes': bytes,
+        'fileName': _invoiceFileName(),
+      });
+      _showMessage('فاکتور در گالری گوشی ذخیره شد.');
+    } catch (_) {
+      _showMessage('ذخیره فاکتور در گالری انجام نشد. دوباره تلاش کنید.');
+    } finally {
+      if (mounted) setState(() => _creatingInvoice = false);
+    }
+  }
+
   Future<void> _shareInvoicePng() async {
     if (_order == null || _creatingInvoice) return;
     setState(() => _creatingInvoice = true);
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-      final boundary = _invoiceKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) throw Exception('invoice boundary not found');
-      final ui.Image image = await boundary.toImage(pixelRatio: 3);
-      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      final bytes = byteData?.buffer.asUint8List();
-      if (bytes == null) throw Exception('empty png');
-
+      final bytes = await _createInvoiceBytes();
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/invoice-${_order!.number}.png');
+      final fileName = _invoiceFileName();
+      final file = File('${dir.path}/$fileName');
       await file.writeAsBytes(bytes, flush: true);
 
       await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'image/png', name: 'invoice-${_order!.number}.png')],
+        [XFile(file.path, mimeType: 'image/png', name: fileName)],
         text: 'فاکتور سفارش #${_order!.number}',
       );
     } catch (_) {
@@ -127,15 +158,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
         const SizedBox(height: 14),
         ElevatedButton.icon(
-          onPressed: _creatingInvoice ? null : _shareInvoicePng,
+          onPressed: _creatingInvoice ? null : _saveInvoiceToGallery,
           icon: _creatingInvoice
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-              : const Icon(Icons.image_outlined),
-          label: Text(_creatingInvoice ? 'در حال ساخت فاکتور...' : 'ساخت و ارسال فاکتور PNG'),
+              : const Icon(Icons.download_done_rounded),
+          label: Text(_creatingInvoice ? 'در حال ساخت فاکتور...' : 'دانلود فاکتور در گالری'),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: _creatingInvoice ? null : _shareInvoicePng,
+          icon: const Icon(Icons.share_rounded),
+          label: const Text('ارسال یا پرینت فاکتور PNG'),
         ),
         const SizedBox(height: 10),
         const Text(
-          'بعد از ساخت PNG، از صفحه اشتراک گوشی می‌توانید فاکتور را برای ارسال، ذخیره یا چاپ انتخاب کنید.',
+          'با دکمه اول فاکتور در گالری ذخیره می‌شود. با دکمه دوم می‌توانید آن را ارسال یا برای چاپ انتخاب کنید.',
           textAlign: TextAlign.center,
           style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5, height: 1.6),
         ),

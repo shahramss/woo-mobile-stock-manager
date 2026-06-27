@@ -128,15 +128,18 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
                         }
                         final itemIndex = index ~/ 2;
                         if (itemIndex == 0) {
+                          return _OrdersBigCard(onTap: _openOrders);
+                        }
+                        if (itemIndex == 1) {
                           return _AllProductsCard(onTap: _openAllProducts);
                         }
-                        final category = _categories[itemIndex - 1];
+                        final category = _categories[itemIndex - 2];
                         return _CategoryCard(
                           category: category,
                           onTap: () => _openCategory(category),
                         );
                       },
-                      childCount: ((_categories.length + 1) * 2) - 1,
+                      childCount: ((_categories.length + 2) * 2) - 1,
                     ),
                   ),
                 ),
@@ -241,6 +244,56 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
             style: TextStyle(color: Color(0xFFFCE7F3), fontSize: 11.5, fontWeight: FontWeight.w600),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OrdersBigCard extends StatelessWidget {
+  const _OrdersBigCard({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFBE185D), Color(0xFFEC4899), Color(0xFFF9A8D4)],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFDB2777).withOpacity(0.18),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: const Padding(
+          padding: EdgeInsets.all(18),
+          child: Row(
+            children: [
+              Icon(Icons.receipt_long_rounded, color: Colors.white, size: 34),
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('سفارشات فروشگاه', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                    SizedBox(height: 5),
+                    Text('مشاهده سفارش جدید، جزئیات مشتری و فاکتور PNG', style: TextStyle(color: Color(0xFFFCE7F3), fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_left_rounded, color: Colors.white),
+            ],
+          ),
+        ),
       ),
     );
   }

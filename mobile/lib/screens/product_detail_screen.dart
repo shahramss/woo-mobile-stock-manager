@@ -121,13 +121,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
       setState(() => _uploadingImage = true);
       final api = context.read<AuthProvider>().api;
-      final updated = await api.updateProductImage(
+      await api.updateProductImage(
         id: widget.productId,
         imagePath: picked.path,
       );
 
+      // بعد از آپلود تصویر، محصول را جداگانه دوباره می‌گیریم تا تغییر تصویر مستقل از قیمت/موجودی اعمال شود.
+      var refreshed = await api.getProduct(widget.productId);
+      if (refreshed.imageUrl.isNotEmpty) {
+        refreshed = refreshed.copyWith(imageUrl: _withCacheBust(refreshed.imageUrl));
+      }
+
       await LocalProductActionStore.markUpdated(widget.productId);
-      final localUpdated = await LocalProductActionStore.applyToProduct(updated);
+      final localUpdated = await LocalProductActionStore.applyToProduct(refreshed);
       setState(() {
         _product = localUpdated;
         _hasChanged = true;
@@ -140,6 +146,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     } finally {
       if (mounted) setState(() => _uploadingImage = false);
     }
+  }
+
+  String _withCacheBust(String url) {
+    final joiner = url.contains('?') ? '&' : '?';
+    return '$url${joiner}wmsm_img=${DateTime.now().millisecondsSinceEpoch}';
   }
 
   Future<void> _sendToBale() async {

@@ -81,6 +81,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+        child: ElevatedButton.icon(
+          onPressed: _loading ? null : () => _loadOrders(refresh: true),
+          icon: _loading
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
+              : const Icon(Icons.refresh_rounded),
+          label: Text(_loading ? 'در حال بروزرسانی...' : 'بروزرسانی سفارش‌ها'),
+        ),
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () => _loadOrders(refresh: true),
@@ -110,7 +120,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 const SliverFillRemaining(hasScrollBody: false, child: EmptyState(message: 'سفارشی پیدا نشد'))
               else
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
@@ -168,7 +178,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               children: [
                 Text('سفارشات', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w900)),
                 SizedBox(height: 4),
-                Text('نمایش سفارش‌های جدید و جزئیات مشتری', style: TextStyle(color: Color(0xFFFCE7F3), fontSize: 12.5, fontWeight: FontWeight.w700)),
+                Text('برای دریافت سفارش‌های تازه، دکمه بزرگ پایین صفحه را بزنید', style: TextStyle(color: Color(0xFFFCE7F3), fontSize: 12.5, fontWeight: FontWeight.w700)),
               ],
             ),
           ),

@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Modiriat Sari API
- * Description: REST API امن برای اپلیکیشن مدیریت محصولات ووکامرس + سفارشات + ارسال به بله + تغییر تصویر شاخص + رنگ محلی اپ.
- * Version: 1.8.0
+ * Description: REST API امن برای اپلیکیشن مدیریت محصولات ووکامرس + سفارشات + ارسال به بله + تغییر تصویر شاخص + رنگ محلی اپ + سفارشات و فاکتور گالری.
+ * Version: 1.9.0
  * Author: شهرام سعیدنیا
  * Text Domain: woo-mobile-stock-manager-api
  */
@@ -448,12 +448,15 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         try {
             $product->set_image_id((int) $attachment_id);
             $product->save();
+            clean_post_cache($product_id);
+            wc_delete_product_transients($product_id);
             $this->set_product_last_action($product_id, 'updated');
+            $fresh_product = wc_get_product($product_id);
         } catch (Exception $e) {
             return $this->error('wmsm_image_product_save_failed', 'تصویر آپلود شد اما روی محصول ذخیره نشد.', 500);
         }
 
-        return rest_ensure_response($this->format_product($product));
+        return rest_ensure_response($this->format_product($fresh_product ?: $product));
     }
 
     public function get_bale_settings(WP_REST_Request $request) {
