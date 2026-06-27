@@ -20,6 +20,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<OrderSummary> _orders = [];
   Timer? _timeRefreshTimer;
+  DateTime _now = DateTime.now();
   int _page = 1;
   bool _hasMore = true;
   bool _loading = false;
@@ -30,9 +31,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
     super.initState();
     _loadOrders(refresh: true);
     _scrollController.addListener(_onScroll);
-    // زمان نسبی سفارش‌ها مثل «۱۶ ساعت قبل» بدون دریافت دوباره از سرور بروزرسانی می‌شود.
+    // زمان نسبی سفارش‌ها مثل «۱۶ ساعت قبل» بر اساس ساعت خود اپ هر دقیقه دوباره محاسبه می‌شود.
     _timeRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted && _orders.isNotEmpty) setState(() {});
+      if (mounted) {
+        setState(() => _now = DateTime.now());
+      }
     });
   }
 
@@ -53,6 +56,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   Future<void> _loadOrders({bool refresh = false}) async {
     if (_loading) return;
+    _now = DateTime.now();
     setState(() {
       _loading = true;
       _error = null;
@@ -67,6 +71,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       final api = context.read<AuthProvider>().api;
       final result = await api.getOrders(page: _page, perPage: 20);
       setState(() {
+        _now = DateTime.now();
         _orders.addAll(result.items);
         _hasMore = result.hasMore;
         _page++;
@@ -141,7 +146,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           );
                         }
                         final order = _orders[itemIndex];
-                        return _OrderCard(order: order, onTap: () => _openOrder(order));
+                        return _OrderCard(order: order, now: _now, onTap: () => _openOrder(order));
                       },
                       childCount: ((_orders.length + (_hasMore ? 1 : 0)) * 2) - 1,
                     ),
@@ -201,8 +206,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
 }
 
 class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order, required this.onTap});
+  const _OrderCard({required this.order, required this.now, required this.onTap});
   final OrderSummary order;
+  final DateTime now;
   final VoidCallback onTap;
 
   @override
@@ -242,7 +248,7 @@ class _OrderCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Expanded(child: Text(_timeAgo(order.dateCreated), style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5))),
+                        Expanded(child: Text(_timeAgo(order, now), style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5))),
                         Text('${order.total} تومان', style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w900)),
                       ],
                     ),
@@ -258,14 +264,26 @@ class _OrderCard extends StatelessWidget {
     );
   }
 
-  String _timeAgo(String value) {
-    final date = DateTime.tryParse(value);
-    if (date == null) return '';
-    final diff = DateTime.now().difference(date.toLocal());
+  String _timeAgo(OrderSummary order, DateTime now) {
+    final date = _orderDate(order);
+    if (date == null) return 'زمان نامشخص';
+    var diff = now.difference(date);
+    if (diff.isNegative) diff = Duration.zero;
     if (diff.inMinutes < 1) return 'چند لحظه قبل';
     if (diff.inMinutes < 60) return '${diff.inMinutes} دقیقه قبل';
     if (diff.inHours < 24) return '${diff.inHours} ساعت قبل';
     return '${diff.inDays} روز قبل';
+  }
+
+  DateTime? _orderDate(OrderSummary order) {
+    // نسخه جدید افزونه زمان سفارش را به صورت timestamp می‌فرستد تا مشکل کش/فرمت تاریخ نداشته باشیم.
+    if (order.dateCreatedTimestamp > 0) {
+      return DateTime.fromMillisecondsSinceEpoch(order.dateCreatedTimestamp * 1000, isUtc: true).toLocal();
+    }
+    final raw = order.dateCreated.trim();
+    if (raw.isEmpty) return null;
+    final parsed = DateTime.tryParse(raw);
+    return parsed?.toLocal();
   }
 }
 

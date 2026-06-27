@@ -13,6 +13,7 @@ class OrderSummary {
     required this.status,
     required this.statusLabel,
     required this.dateCreated,
+    required this.dateCreatedTimestamp,
     required this.total,
     required this.paymentMethodTitle,
     required this.customerName,
@@ -24,6 +25,7 @@ class OrderSummary {
   final String status;
   final String statusLabel;
   final String dateCreated;
+  final int dateCreatedTimestamp;
   final String total;
   final String paymentMethodTitle;
   final String customerName;
@@ -36,6 +38,7 @@ class OrderSummary {
       status: (json['status'] ?? '').toString(),
       statusLabel: (json['status_label'] ?? '').toString(),
       dateCreated: (json['date_created'] ?? '').toString(),
+      dateCreatedTimestamp: int.tryParse((json['date_created_timestamp'] ?? json['date_created_unix'] ?? '0').toString()) ?? 0,
       total: (json['total'] ?? '').toString(),
       paymentMethodTitle: (json['payment_method_title'] ?? '').toString(),
       customerName: (json['customer_name'] ?? '').toString(),
@@ -51,6 +54,7 @@ class OrderDetail {
     required this.status,
     required this.statusLabel,
     required this.dateCreated,
+    required this.dateCreatedTimestamp,
     required this.total,
     required this.shippingTotal,
     required this.paymentMethodTitle,
@@ -66,6 +70,7 @@ class OrderDetail {
   final String status;
   final String statusLabel;
   final String dateCreated;
+  final int dateCreatedTimestamp;
   final String total;
   final String shippingTotal;
   final String paymentMethodTitle;
@@ -83,6 +88,7 @@ class OrderDetail {
       status: (json['status'] ?? '').toString(),
       statusLabel: (json['status_label'] ?? '').toString(),
       dateCreated: (json['date_created'] ?? '').toString(),
+      dateCreatedTimestamp: int.tryParse((json['date_created_timestamp'] ?? json['date_created_unix'] ?? '0').toString()) ?? 0,
       total: (json['total'] ?? '').toString(),
       shippingTotal: (json['shipping_total'] ?? '').toString(),
       paymentMethodTitle: (json['payment_method_title'] ?? '').toString(),

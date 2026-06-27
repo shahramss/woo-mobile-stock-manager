@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Modiriat Sari API
  * Description: REST API امن برای اپلیکیشن مدیریت سریع: محصولات، سفارشات، بله، تصویر شاخص، گالری محصول و پاک‌سازی کش LiteSpeed پس از بروزرسانی محصول.
- * Version: 2.1.0
+ * Version: 2.1.1
  * Author: شهرام سعیدنیا
  * Text Domain: woo-mobile-stock-manager-api
  */
@@ -319,6 +319,8 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         }
 
         return rest_ensure_response([
+            'server_time' => current_time('mysql'),
+            'server_timestamp' => time(),
             'items' => $items,
             'page' => $page,
             'per_page' => $per_page,
@@ -748,6 +750,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
 
 
     public function get_orders(WP_REST_Request $request) {
+        nocache_headers();
         $wc_error = $this->ensure_woocommerce();
         if (is_wp_error($wc_error)) {
             return $wc_error;
@@ -779,6 +782,8 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         }
 
         return rest_ensure_response([
+            'server_time' => current_time('mysql'),
+            'server_timestamp' => time(),
             'items' => $items,
             'page' => $page,
             'per_page' => $per_page,
@@ -788,6 +793,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
     }
 
     public function get_order(WP_REST_Request $request) {
+        nocache_headers();
         $wc_error = $this->ensure_woocommerce();
         if (is_wp_error($wc_error)) {
             return $wc_error;
@@ -1145,6 +1151,7 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             'status' => (string) $order->get_status(),
             'status_label' => wc_get_order_status_name($order->get_status()),
             'date_created' => $order->get_date_created() ? $order->get_date_created()->date('c') : '',
+            'date_created_timestamp' => $order->get_date_created() ? (int) $order->get_date_created()->getTimestamp() : 0,
             'total' => $this->format_plain_amount($order->get_total()),
             'payment_method_title' => $order->get_payment_method_title(),
             'customer_name' => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()),
