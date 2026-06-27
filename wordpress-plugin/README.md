@@ -1,13 +1,13 @@
 # افزونه Woo Mobile Stock Manager API
 
-این افزونه API امن برای اپ مدیریت بانومی می‌سازد.
+این افزونه API لازم برای اپ مدیریت بانومی را فراهم می‌کند.
 
-Endpoints:
+امکانات:
 
-- POST `/wp-json/wmsm/v1/login`
-- GET `/wp-json/wmsm/v1/categories`
-- GET `/wp-json/wmsm/v1/products?category_id=12&search=قفل&page=1&per_page=20`
-- GET `/wp-json/wmsm/v1/products/{id}`
-- PUT `/wp-json/wmsm/v1/products/{id}`
+- ورود امن با حساب وردپرس
+- دریافت دسته‌بندی‌ها و محصولات ووکامرس
+- ویرایش قیمت و موجودی محصول
+- ارسال محصول به کانال بله
+- زمان‌بندی ارسال خودکار محصولات یک دسته‌بندی به کانال بله
 
-خروجی محصول شامل `image_url` هم هست تا تصویر محصول در اپ نمایش داده شود.
+برای نصب، پوشه `woo-mobile-stock-manager-api` را zip و در وردپرس نصب کن.

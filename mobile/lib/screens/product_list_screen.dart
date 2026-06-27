@@ -28,6 +28,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   int _page = 1;
   bool _hasMore = true;
   bool _isLoading = false;
+  bool _autoStarting = false;
   String _search = '';
   String? _error;
 
@@ -115,6 +116,125 @@ class _ProductListScreenState extends State<ProductListScreen> {
     }
   }
 
+  Future<void> _openAutoPostDialog() async {
+    final category = widget.category;
+    if (category == null) {
+      _showMessage('برای ارسال خودکار، اول یک دسته‌بندی را انتخاب کنید.');
+      return;
+    }
+
+    final textController = TextEditingController();
+    var selectedInterval = 60;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('ارسال خودکار دسته به بله'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('محصولات دسته «${category.name}» به ترتیب در کانال بله منتشر می‌شوند.'),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<int>(
+                      value: selectedInterval,
+                      decoration: const InputDecoration(
+                        labelText: 'فاصله بین هر پست',
+                        prefixIcon: Icon(Icons.timer_rounded),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 3, child: Text('هر ۳ دقیقه')),
+                        DropdownMenuItem(value: 60, child: Text('هر ۱ ساعت')),
+                        DropdownMenuItem(value: 420, child: Text('هر ۷ ساعت')),
+                        DropdownMenuItem(value: 1440, child: Text('هر ۲۴ ساعت')),
+                      ],
+                      onChanged: (value) => setDialogState(() => selectedInterval = value ?? 60),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: textController,
+                      minLines: 3,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: 'متن ثابت قبل از مشخصات و قیمت',
+                        hintText: 'مثلاً: معرفی محصولات این دسته...',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'نکته: زمان‌بندی روی وردپرس انجام می‌شود و اگر سایت بازدید نداشته باشد، ممکن است ارسال کمی دیرتر انجام شود.',
+                      style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5, height: 1.6),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('لغو'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('شروع ارسال'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      textController.dispose();
+      return;
+    }
+
+    setState(() => _autoStarting = true);
+    try {
+      final api = context.read<AuthProvider>().api;
+      final result = await api.startBaleAutoPost(
+        categoryId: category.id,
+        intervalMinutes: selectedInterval,
+        manualText: textController.text,
+      );
+      _showMessage('${result.message} تعداد محصولات: ${result.total}');
+    } on ApiException catch (e) {
+      _showMessage(e.message);
+    } catch (_) {
+      _showMessage('فعال‌سازی ارسال خودکار انجام نشد.');
+    } finally {
+      textController.dispose();
+      if (mounted) setState(() => _autoStarting = false);
+    }
+  }
+
+
+  Future<void> _stopAutoPost() async {
+    final category = widget.category;
+    if (category == null) return;
+
+    setState(() => _autoStarting = true);
+    try {
+      final api = context.read<AuthProvider>().api;
+      final message = await api.stopBaleAutoPost(categoryId: category.id);
+      _showMessage(message);
+    } on ApiException catch (e) {
+      _showMessage(e.message);
+    } catch (_) {
+      _showMessage('توقف ارسال خودکار انجام نشد.');
+    } finally {
+      if (mounted) setState(() => _autoStarting = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = widget.category?.name ?? 'همه محصولات';
@@ -159,9 +279,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
-                        if (index.isOdd) {
-                          return const SizedBox(height: 12);
-                        }
+                        if (index.isOdd) return const SizedBox(height: 12);
                         final itemIndex = index ~/ 2;
                         if (itemIndex >= _products.length) {
                           return const Padding(
@@ -274,6 +392,41 @@ class _ProductListScreenState extends State<ProductListScreen> {
               ),
             ),
           ),
+          if (widget.category != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(color: Colors.white.withOpacity(0.7)),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                    ),
+                    onPressed: _autoStarting ? null : _openAutoPostDialog,
+                    icon: _autoStarting
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.campaign_rounded),
+                    label: Text(_autoStarting ? 'در حال انجام...' : 'ارسال خودکار'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(color: Colors.white.withOpacity(0.55)),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                    ),
+                    onPressed: _autoStarting ? null : _stopAutoPost,
+                    icon: const Icon(Icons.stop_circle_outlined),
+                    label: const Text('توقف'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -306,11 +459,7 @@ class _ProductCard extends StatelessWidget {
                       product.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A),
-                      ),
+                      style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
                     ),
                     const SizedBox(height: 8),
                     Row(

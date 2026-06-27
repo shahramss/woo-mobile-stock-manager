@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Woo Mobile Stock Manager API
- * Description: REST API امن برای اپلیکیشن موبایل مدیریت قیمت، موجودی، تصویر، دسته‌بندی و جستجوی محصولات ووکامرس.
- * Version: 1.1.0
+ * Description: REST API امن برای اپلیکیشن موبایل مدیریت محصولات ووکامرس + ارسال محصول به کانال بله.
+ * Version: 1.2.0
  * Author: شهرام سعیدنیا
  * Text Domain: woo-mobile-stock-manager-api
  */
@@ -17,11 +17,18 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
     private const TOKEN_EXPIRES_META = '_wmsm_api_token_expires';
     private const TOKEN_DAYS = 30;
 
+    private const BALE_BOT_TOKEN_OPTION = 'wmsm_bale_bot_token';
+    private const BALE_CHAT_ID_OPTION = 'wmsm_bale_chat_id';
+    private const BALE_JOBS_OPTION = 'wmsm_bale_auto_jobs';
+    private const BALE_CRON_HOOK = 'wmsm_bale_auto_send_product';
+    private const BALE_COOLDOWN_SECONDS = 3600;
+
     private $authorized_user = null;
 
     public function __construct() {
         add_action('rest_api_init', [$this, 'register_routes']);
         add_action('admin_notices', [$this, 'woocommerce_admin_notice']);
+        add_action(self::BALE_CRON_HOOK, [$this, 'run_bale_auto_job'], 10, 1);
     }
 
     public function woocommerce_admin_notice(): void {
@@ -56,28 +63,10 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             'callback' => [$this, 'get_products'],
             'permission_callback' => [$this, 'can_access'],
             'args' => [
-                'category_id' => [
-                    'required' => false,
-                    'type' => 'integer',
-                    'sanitize_callback' => 'absint',
-                ],
-                'search' => [
-                    'required' => false,
-                    'type' => 'string',
-                    'sanitize_callback' => 'sanitize_text_field',
-                ],
-                'page' => [
-                    'required' => false,
-                    'type' => 'integer',
-                    'default' => 1,
-                    'sanitize_callback' => 'absint',
-                ],
-                'per_page' => [
-                    'required' => false,
-                    'type' => 'integer',
-                    'default' => 20,
-                    'sanitize_callback' => 'absint',
-                ],
+                'category_id' => ['required' => false, 'type' => 'integer', 'sanitize_callback' => 'absint'],
+                'search' => ['required' => false, 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field'],
+                'page' => ['required' => false, 'type' => 'integer', 'default' => 1, 'sanitize_callback' => 'absint'],
+                'per_page' => ['required' => false, 'type' => 'integer', 'default' => 20, 'sanitize_callback' => 'absint'],
             ],
         ]);
 
@@ -86,26 +75,67 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'get_product'],
                 'permission_callback' => [$this, 'can_access'],
-                'args' => [
-                    'id' => [
-                        'required' => true,
-                        'type' => 'integer',
-                        'sanitize_callback' => 'absint',
-                    ],
-                ],
+                'args' => ['id' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint']],
             ],
             [
                 'methods' => WP_REST_Server::EDITABLE,
                 'callback' => [$this, 'update_product'],
                 'permission_callback' => [$this, 'can_access'],
+                'args' => ['id' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint']],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/products/(?P<id>\d+)/bale-send', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'send_product_to_bale'],
+            'permission_callback' => [$this, 'can_access'],
+            'args' => [
+                'id' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint'],
+                'manual_text' => ['required' => false, 'type' => 'string', 'sanitize_callback' => 'sanitize_textarea_field'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/bale/settings', [
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => [$this, 'get_bale_settings'],
+                'permission_callback' => [$this, 'can_access'],
+            ],
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'save_bale_settings'],
+                'permission_callback' => [$this, 'can_access'],
                 'args' => [
-                    'id' => [
-                        'required' => true,
-                        'type' => 'integer',
-                        'sanitize_callback' => 'absint',
-                    ],
+                    'bot_token' => ['required' => false, 'type' => 'string'],
+                    'chat_id' => ['required' => true, 'type' => 'string'],
                 ],
             ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/bale/auto-start', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'start_bale_auto_job'],
+            'permission_callback' => [$this, 'can_access'],
+            'args' => [
+                'category_id' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint'],
+                'interval_minutes' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint'],
+                'manual_text' => ['required' => false, 'type' => 'string', 'sanitize_callback' => 'sanitize_textarea_field'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/bale/auto-stop', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'stop_bale_auto_job'],
+            'permission_callback' => [$this, 'can_access'],
+            'args' => [
+                'category_id' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/bale/auto-jobs', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_bale_auto_jobs'],
+            'permission_callback' => [$this, 'can_access'],
         ]);
     }
 
@@ -122,7 +152,6 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             return $this->error('wmsm_missing_login_fields', 'نام کاربری و رمز عبور را وارد کنید.', 400);
         }
 
-        // احراز هویت با همان حساب وردپرس
         $user = wp_authenticate($username, $password);
         if (is_wp_error($user)) {
             return $this->error('wmsm_invalid_login', 'نام کاربری یا رمز عبور اشتباه است.', 401);
@@ -139,10 +168,8 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         update_user_meta($user->ID, self::TOKEN_HASH_META, $hash);
         update_user_meta($user->ID, self::TOKEN_EXPIRES_META, $expires);
 
-        $token = $user->ID . ':' . $secret;
-
         return rest_ensure_response([
-            'token' => $token,
+            'token' => $user->ID . ':' . $secret,
             'expires_at' => gmdate('c', $expires),
             'user' => [
                 'id' => (int) $user->ID,
@@ -203,18 +230,15 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         ];
 
         if ($search !== '') {
-            // جستجو داخل عنوان/متن محصول؛ اگر دسته هم ارسال شود، فقط در همان دسته جستجو می‌شود.
             $args['s'] = $search;
         }
 
         if ($category_id > 0) {
-            $args['tax_query'] = [
-                [
-                    'taxonomy' => 'product_cat',
-                    'field' => 'term_id',
-                    'terms' => [$category_id],
-                ],
-            ];
+            $args['tax_query'] = [[
+                'taxonomy' => 'product_cat',
+                'field' => 'term_id',
+                'terms' => [$category_id],
+            ]];
         }
 
         $query = new WP_Query($args);
@@ -292,7 +316,6 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             if (!is_numeric($stock_quantity) || (int) $stock_quantity < 0) {
                 return $this->error('wmsm_invalid_stock_quantity', 'تعداد موجودی معتبر نیست.', 400);
             }
-            // برای اینکه عدد موجودی واقعاً ذخیره شود، مدیریت موجودی فعال می‌شود.
             $product->set_manage_stock(true);
             $product->set_stock_quantity(wc_stock_amount($stock_quantity));
         }
@@ -314,6 +337,187 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         return rest_ensure_response($this->format_product($product));
     }
 
+    public function get_bale_settings(WP_REST_Request $request) {
+        return rest_ensure_response([
+            'has_bot_token' => $this->get_bale_bot_token() !== '',
+            'chat_id' => $this->get_bale_chat_id(),
+            'jobs' => $this->format_bale_jobs(),
+        ]);
+    }
+
+    public function save_bale_settings(WP_REST_Request $request) {
+        $chat_id = trim(sanitize_text_field((string) $request->get_param('chat_id')));
+        $bot_token = trim(sanitize_text_field((string) $request->get_param('bot_token')));
+
+        if ($chat_id === '') {
+            return $this->error('wmsm_bale_chat_id_missing', 'شناسه یا نام کاربری کانال بله را وارد کنید.', 400);
+        }
+
+        if ($bot_token !== '') {
+            update_option(self::BALE_BOT_TOKEN_OPTION, $bot_token, false);
+        }
+        update_option(self::BALE_CHAT_ID_OPTION, $chat_id, false);
+
+        return rest_ensure_response([
+            'message' => 'تنظیمات بله ذخیره شد.',
+            'has_bot_token' => $this->get_bale_bot_token() !== '',
+            'chat_id' => $this->get_bale_chat_id(),
+        ]);
+    }
+
+    public function send_product_to_bale(WP_REST_Request $request) {
+        $wc_error = $this->ensure_woocommerce();
+        if (is_wp_error($wc_error)) {
+            return $wc_error;
+        }
+
+        $product_id = absint($request['id']);
+        $product = wc_get_product($product_id);
+        if (!$product) {
+            return $this->error('wmsm_product_not_found', 'محصول پیدا نشد.', 404);
+        }
+        if (!$this->can_edit_this_product($product_id)) {
+            return $this->error('wmsm_product_forbidden', 'اجازه ارسال این محصول را ندارید.', 403);
+        }
+
+        $remaining = $this->get_bale_cooldown_remaining($product_id);
+        if ($remaining > 0) {
+            return $this->error('wmsm_bale_cooldown', 'این محصول تازه ارسال شده است. تا ' . $this->format_seconds($remaining) . ' دیگر دوباره قابل ارسال است.', 429);
+        }
+
+        $manual_text = sanitize_textarea_field((string) $request->get_param('manual_text'));
+        $result = $this->send_product_post_to_bale($product, $manual_text);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        $this->set_bale_cooldown($product_id);
+
+        return rest_ensure_response([
+            'message' => 'محصول در کانال بله منتشر شد.',
+            'cooldown_remaining' => self::BALE_COOLDOWN_SECONDS,
+        ]);
+    }
+
+    public function start_bale_auto_job(WP_REST_Request $request) {
+        $wc_error = $this->ensure_woocommerce();
+        if (is_wp_error($wc_error)) {
+            return $wc_error;
+        }
+
+        $settings_error = $this->ensure_bale_settings();
+        if (is_wp_error($settings_error)) {
+            return $settings_error;
+        }
+
+        $category_id = absint($request->get_param('category_id'));
+        $interval = absint($request->get_param('interval_minutes'));
+        $manual_text = sanitize_textarea_field((string) $request->get_param('manual_text'));
+        $allowed = [3, 60, 420, 1440];
+
+        if ($category_id <= 0) {
+            return $this->error('wmsm_bale_category_required', 'برای ارسال خودکار باید یک دسته‌بندی انتخاب شود.', 400);
+        }
+        if (!in_array($interval, $allowed, true)) {
+            return $this->error('wmsm_bale_invalid_interval', 'بازه ارسال فقط می‌تواند ۳ دقیقه، ۱ ساعت، ۷ ساعت یا ۲۴ ساعت باشد.', 400);
+        }
+
+        $term = get_term($category_id, 'product_cat');
+        if (!$term || is_wp_error($term)) {
+            return $this->error('wmsm_bale_category_not_found', 'دسته‌بندی پیدا نشد.', 404);
+        }
+
+        $product_ids = $this->get_product_ids_by_category($category_id);
+        if (empty($product_ids)) {
+            return $this->error('wmsm_bale_empty_category', 'در این دسته‌بندی محصولی برای ارسال پیدا نشد.', 400);
+        }
+
+        $jobs = $this->get_bale_jobs();
+        $jobs[(string) $category_id] = [
+            'category_id' => $category_id,
+            'category_name' => html_entity_decode($term->name, ENT_QUOTES, get_bloginfo('charset')),
+            'interval_minutes' => $interval,
+            'manual_text' => $manual_text,
+            'product_ids' => array_values($product_ids),
+            'index' => 0,
+            'total' => count($product_ids),
+            'started_at' => time(),
+            'next_run' => time() + 60,
+            'status' => 'active',
+        ];
+        update_option(self::BALE_JOBS_OPTION, $jobs, false);
+
+        wp_clear_scheduled_hook(self::BALE_CRON_HOOK, [$category_id]);
+        wp_schedule_single_event(time() + 60, self::BALE_CRON_HOOK, [$category_id]);
+
+        return rest_ensure_response([
+            'message' => 'ارسال خودکار این دسته‌بندی فعال شد. اولین محصول حدود یک دقیقه دیگر ارسال می‌شود.',
+            'category_id' => $category_id,
+            'total' => count($product_ids),
+            'interval_minutes' => $interval,
+            'next_run' => gmdate('c', time() + 60),
+        ]);
+    }
+
+    public function stop_bale_auto_job(WP_REST_Request $request) {
+        $category_id = absint($request->get_param('category_id'));
+        $jobs = $this->get_bale_jobs();
+        if (isset($jobs[(string) $category_id])) {
+            unset($jobs[(string) $category_id]);
+            update_option(self::BALE_JOBS_OPTION, $jobs, false);
+        }
+        wp_clear_scheduled_hook(self::BALE_CRON_HOOK, [$category_id]);
+
+        return rest_ensure_response(['message' => 'ارسال خودکار این دسته‌بندی متوقف شد.']);
+    }
+
+    public function get_bale_auto_jobs(WP_REST_Request $request) {
+        return rest_ensure_response(['jobs' => $this->format_bale_jobs()]);
+    }
+
+    public function run_bale_auto_job($category_id): void {
+        $category_id = absint($category_id);
+        if ($category_id <= 0 || !function_exists('wc_get_product')) {
+            return;
+        }
+
+        $jobs = $this->get_bale_jobs();
+        $key = (string) $category_id;
+        if (empty($jobs[$key]) || ($jobs[$key]['status'] ?? '') !== 'active') {
+            return;
+        }
+
+        $job = $jobs[$key];
+        $product_ids = array_values(array_filter(array_map('absint', $job['product_ids'] ?? [])));
+        $index = max(0, absint($job['index'] ?? 0));
+        $interval = max(3, absint($job['interval_minutes'] ?? 60));
+
+        if ($index >= count($product_ids)) {
+            unset($jobs[$key]);
+            update_option(self::BALE_JOBS_OPTION, $jobs, false);
+            return;
+        }
+
+        $product = wc_get_product($product_ids[$index]);
+        if ($product instanceof WC_Product) {
+            $this->send_product_post_to_bale($product, (string) ($job['manual_text'] ?? ''), true);
+        }
+
+        $index++;
+        if ($index >= count($product_ids)) {
+            unset($jobs[$key]);
+            update_option(self::BALE_JOBS_OPTION, $jobs, false);
+            return;
+        }
+
+        $next_run = time() + ($interval * MINUTE_IN_SECONDS);
+        $jobs[$key]['index'] = $index;
+        $jobs[$key]['next_run'] = $next_run;
+        update_option(self::BALE_JOBS_OPTION, $jobs, false);
+
+        wp_schedule_single_event($next_run, self::BALE_CRON_HOOK, [$category_id]);
+    }
+
     public function can_access(WP_REST_Request $request) {
         $wc_error = $this->ensure_woocommerce();
         if (is_wp_error($wc_error)) {
@@ -332,6 +536,213 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
         $this->authorized_user = $user;
         wp_set_current_user($user->ID);
         return true;
+    }
+
+    private function send_product_post_to_bale(WC_Product $product, string $manual_text = '', bool $ignore_cooldown = false) {
+        $settings_error = $this->ensure_bale_settings();
+        if (is_wp_error($settings_error)) {
+            return $settings_error;
+        }
+
+        if (!$ignore_cooldown && $this->get_bale_cooldown_remaining($product->get_id()) > 0) {
+            return $this->error('wmsm_bale_cooldown', 'این محصول تازه ارسال شده است.', 429);
+        }
+
+        $token = $this->get_bale_bot_token();
+        $chat_id = $this->get_bale_chat_id();
+        $caption = $this->build_bale_caption($product, $manual_text);
+        $image_url = $this->get_product_image_url($product, 'full');
+
+        if ($image_url !== '') {
+            return $this->call_bale_api('sendPhoto', [
+                'chat_id' => $chat_id,
+                'photo' => $image_url,
+                'caption' => $this->limit_text($caption, 3900),
+            ], $token);
+        }
+
+        return $this->call_bale_api('sendMessage', [
+            'chat_id' => $chat_id,
+            'text' => $this->limit_text($caption, 3900),
+        ], $token);
+    }
+
+    private function call_bale_api(string $method, array $payload, string $token) {
+        $safe_token = str_replace('%3A', ':', rawurlencode($token));
+        $url = 'https://tapi.bale.ai/bot' . $safe_token . '/' . $method;
+        $response = wp_remote_post($url, [
+            'timeout' => 30,
+            'headers' => ['Content-Type' => 'application/json; charset=utf-8'],
+            'body' => wp_json_encode($payload, JSON_UNESCAPED_UNICODE),
+        ]);
+
+        if (is_wp_error($response)) {
+            return $this->error('wmsm_bale_connection_failed', 'ارتباط با بله برقرار نشد: ' . $response->get_error_message(), 500);
+        }
+
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $body = (string) wp_remote_retrieve_body($response);
+        $json = json_decode($body, true);
+
+        if ($code < 200 || $code >= 300) {
+            $description = is_array($json) && !empty($json['description']) ? $json['description'] : 'خطای نامشخص از سمت بله';
+            return $this->error('wmsm_bale_api_error', 'ارسال به بله ناموفق بود: ' . sanitize_text_field($description), 500);
+        }
+
+        if (is_array($json) && array_key_exists('ok', $json) && !$json['ok']) {
+            $description = !empty($json['description']) ? $json['description'] : 'درخواست بله رد شد.';
+            return $this->error('wmsm_bale_api_not_ok', 'ارسال به بله ناموفق بود: ' . sanitize_text_field($description), 500);
+        }
+
+        return true;
+    }
+
+    private function build_bale_caption(WC_Product $product, string $manual_text = ''): string {
+        $parts = [];
+        $manual_text = trim($manual_text);
+        if ($manual_text !== '') {
+            $parts[] = $manual_text;
+        }
+
+        $parts[] = '📦 ' . $product->get_name();
+
+        $attributes_text = $this->get_product_attributes_text($product);
+        if ($attributes_text !== '') {
+            $parts[] = "مشخصات:\n" . $attributes_text;
+        }
+
+        $regular_price = $product->get_regular_price();
+        $price = $regular_price !== '' ? $regular_price : $product->get_price();
+        if ($price !== '') {
+            $parts[] = '💰 قیمت: ' . wc_price($price, ['currency' => get_woocommerce_currency()]);
+        }
+
+        $permalink = get_permalink($product->get_id());
+        if ($permalink) {
+            $parts[] = '🔗 لینک محصول: ' . $permalink;
+        }
+
+        return wp_strip_all_tags(implode("\n\n", $parts));
+    }
+
+    private function get_product_attributes_text(WC_Product $product): string {
+        $lines = [];
+        foreach ($product->get_attributes() as $attribute) {
+            if (!$attribute instanceof WC_Product_Attribute || !$attribute->get_visible()) {
+                continue;
+            }
+
+            $name = wc_attribute_label($attribute->get_name());
+            if ($attribute->is_taxonomy()) {
+                $values = wc_get_product_terms($product->get_id(), $attribute->get_name(), ['fields' => 'names']);
+            } else {
+                $values = $attribute->get_options();
+            }
+
+            $value = implode('، ', array_filter(array_map('strval', $values)));
+            if ($name !== '' && $value !== '') {
+                $lines[] = '• ' . $name . ': ' . $value;
+            }
+            if (count($lines) >= 8) {
+                break;
+            }
+        }
+
+        $sku = $product->get_sku();
+        if ($sku !== '') {
+            array_unshift($lines, '• کد محصول: ' . $sku);
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function ensure_bale_settings() {
+        if ($this->get_bale_bot_token() === '') {
+            return $this->error('wmsm_bale_token_missing', 'توکن بازوی بله تنظیم نشده است.', 400);
+        }
+        if ($this->get_bale_chat_id() === '') {
+            return $this->error('wmsm_bale_chat_missing', 'شناسه یا نام کاربری کانال بله تنظیم نشده است.', 400);
+        }
+        return true;
+    }
+
+    private function get_product_ids_by_category(int $category_id): array {
+        $query = new WP_Query([
+            'post_type' => 'product',
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'orderby' => 'title',
+            'order' => 'ASC',
+            'fields' => 'ids',
+            'tax_query' => [[
+                'taxonomy' => 'product_cat',
+                'field' => 'term_id',
+                'terms' => [$category_id],
+            ]],
+        ]);
+        return array_map('absint', $query->posts);
+    }
+
+    private function get_bale_jobs(): array {
+        $jobs = get_option(self::BALE_JOBS_OPTION, []);
+        return is_array($jobs) ? $jobs : [];
+    }
+
+    private function format_bale_jobs(): array {
+        $items = [];
+        foreach ($this->get_bale_jobs() as $job) {
+            $total = max(0, absint($job['total'] ?? 0));
+            $index = max(0, absint($job['index'] ?? 0));
+            $items[] = [
+                'category_id' => absint($job['category_id'] ?? 0),
+                'category_name' => (string) ($job['category_name'] ?? ''),
+                'interval_minutes' => absint($job['interval_minutes'] ?? 0),
+                'sent_count' => min($index, $total),
+                'total' => $total,
+                'next_run' => !empty($job['next_run']) ? gmdate('c', absint($job['next_run'])) : '',
+                'status' => (string) ($job['status'] ?? 'active'),
+            ];
+        }
+        return $items;
+    }
+
+    private function get_bale_bot_token(): string {
+        return trim((string) get_option(self::BALE_BOT_TOKEN_OPTION, ''));
+    }
+
+    private function get_bale_chat_id(): string {
+        return trim((string) get_option(self::BALE_CHAT_ID_OPTION, ''));
+    }
+
+    private function get_bale_cooldown_key(int $product_id): string {
+        return 'wmsm_bale_cooldown_' . $product_id;
+    }
+
+    private function set_bale_cooldown(int $product_id): void {
+        set_transient($this->get_bale_cooldown_key($product_id), time() + self::BALE_COOLDOWN_SECONDS, self::BALE_COOLDOWN_SECONDS);
+    }
+
+    private function get_bale_cooldown_remaining(int $product_id): int {
+        $until = (int) get_transient($this->get_bale_cooldown_key($product_id));
+        return max(0, $until - time());
+    }
+
+    private function format_seconds(int $seconds): string {
+        $minutes = (int) ceil($seconds / 60);
+        if ($minutes < 60) {
+            return $minutes . ' دقیقه';
+        }
+        return 'حدود ' . ceil($minutes / 60) . ' ساعت';
+    }
+
+    private function limit_text(string $text, int $max): string {
+        if (function_exists('mb_strlen') && mb_strlen($text, 'UTF-8') > $max) {
+            return mb_substr($text, 0, $max - 3, 'UTF-8') . '...';
+        }
+        if (!function_exists('mb_strlen') && strlen($text) > $max) {
+            return substr($text, 0, $max - 3) . '...';
+        }
+        return $text;
     }
 
     private function authenticate_token(WP_REST_Request $request) {
@@ -417,15 +828,6 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
     }
 
     private function format_product(WC_Product $product): array {
-        $image_url = '';
-        $image_id = $product->get_image_id();
-        if ($image_id) {
-            $image_url = wp_get_attachment_image_url($image_id, 'woocommerce_thumbnail');
-            if (!$image_url) {
-                $image_url = wp_get_attachment_image_url($image_id, 'medium');
-            }
-        }
-
         return [
             'id' => (int) $product->get_id(),
             'name' => $product->get_name(),
@@ -433,8 +835,21 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             'regular_price' => (string) $product->get_regular_price(),
             'stock_quantity' => $product->get_stock_quantity(),
             'stock_status' => $product->get_stock_status(),
-            'image_url' => $image_url ?: '',
+            'image_url' => $this->get_product_image_url($product),
+            'bale_cooldown_remaining' => $this->get_bale_cooldown_remaining($product->get_id()),
         ];
+    }
+
+    private function get_product_image_url(WC_Product $product, string $size = 'woocommerce_thumbnail'): string {
+        $image_id = $product->get_image_id();
+        if (!$image_id) {
+            return '';
+        }
+        $url = wp_get_attachment_image_url($image_id, $size);
+        if (!$url && $size !== 'medium') {
+            $url = wp_get_attachment_image_url($image_id, 'medium');
+        }
+        return $url ?: '';
     }
 
     private function create_random_secret(): string {

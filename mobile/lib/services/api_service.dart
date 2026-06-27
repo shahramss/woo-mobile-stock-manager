@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../models/login_result.dart';
+import '../models/bale.dart';
 import '../models/product.dart';
 import '../models/product_category.dart';
 
@@ -146,6 +147,86 @@ class ApiService {
         },
       );
       return Product.fromJson(response.data ?? {});
+    } on DioException catch (e) {
+      throw ApiException(_readDioError(e));
+    }
+  }
+
+
+  Future<BaleSettings> getBaleSettings() async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>('/bale/settings');
+      return BaleSettings.fromJson(response.data ?? {});
+    } on DioException catch (e) {
+      throw ApiException(_readDioError(e));
+    }
+  }
+
+  Future<BaleSettings> saveBaleSettings({
+    required String botToken,
+    required String chatId,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/bale/settings',
+        data: {
+          'bot_token': botToken.trim(),
+          'chat_id': chatId.trim(),
+        },
+      );
+      final data = response.data ?? {};
+      return BaleSettings.fromJson({
+        'has_bot_token': data['has_bot_token'],
+        'chat_id': data['chat_id'],
+        'jobs': data['jobs'] ?? [],
+      });
+    } on DioException catch (e) {
+      throw ApiException(_readDioError(e));
+    }
+  }
+
+  Future<BaleSendResult> sendProductToBale({
+    required int id,
+    required String manualText,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/products/$id/bale-send',
+        data: {'manual_text': manualText.trim()},
+      );
+      return BaleSendResult.fromJson(response.data ?? {});
+    } on DioException catch (e) {
+      throw ApiException(_readDioError(e));
+    }
+  }
+
+  Future<BaleAutoStartResult> startBaleAutoPost({
+    required int categoryId,
+    required int intervalMinutes,
+    required String manualText,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/bale/auto-start',
+        data: {
+          'category_id': categoryId,
+          'interval_minutes': intervalMinutes,
+          'manual_text': manualText.trim(),
+        },
+      );
+      return BaleAutoStartResult.fromJson(response.data ?? {});
+    } on DioException catch (e) {
+      throw ApiException(_readDioError(e));
+    }
+  }
+
+  Future<String> stopBaleAutoPost({required int categoryId}) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/bale/auto-stop',
+        data: {'category_id': categoryId},
+      );
+      return (response.data?['message'] ?? 'ارسال خودکار متوقف شد.').toString();
     } on DioException catch (e) {
       throw ApiException(_readDioError(e));
     }

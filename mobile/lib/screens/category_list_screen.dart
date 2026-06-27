@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../widgets/empty_state.dart';
 import 'product_list_screen.dart';
+import 'bale_settings_screen.dart';
 
 class CategoryListScreen extends StatefulWidget {
   const CategoryListScreen({super.key});
@@ -60,6 +61,14 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const ProductListScreen(),
+      ),
+    );
+  }
+
+  void _openBaleSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const BaleSettingsScreen(),
       ),
     );
   }
@@ -178,6 +187,11 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                tooltip: 'تنظیمات بله',
+                onPressed: _openBaleSettings,
+                icon: const Icon(Icons.campaign_rounded, color: Colors.white),
               ),
               IconButton(
                 tooltip: 'خروج از حساب',

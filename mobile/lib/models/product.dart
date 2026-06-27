@@ -7,6 +7,7 @@ class Product {
     required this.stockQuantity,
     required this.stockStatus,
     required this.imageUrl,
+    required this.baleCooldownRemaining,
   });
 
   final int id;
@@ -16,6 +17,7 @@ class Product {
   final int? stockQuantity;
   final String stockStatus;
   final String imageUrl;
+  final int baleCooldownRemaining;
 
   bool get isInStock => stockStatus == 'instock';
 
@@ -24,6 +26,7 @@ class Product {
     int? stockQuantity,
     String? stockStatus,
     String? imageUrl,
+    int? baleCooldownRemaining,
   }) {
     return Product(
       id: id,
@@ -33,6 +36,7 @@ class Product {
       stockQuantity: stockQuantity ?? this.stockQuantity,
       stockStatus: stockStatus ?? this.stockStatus,
       imageUrl: imageUrl ?? this.imageUrl,
+      baleCooldownRemaining: baleCooldownRemaining ?? this.baleCooldownRemaining,
     );
   }
 
@@ -47,6 +51,7 @@ class Product {
           : int.tryParse(json['stock_quantity'].toString()),
       stockStatus: (json['stock_status'] ?? 'outofstock').toString(),
       imageUrl: (json['image_url'] ?? '').toString(),
+      baleCooldownRemaining: int.tryParse((json['bale_cooldown_remaining'] ?? '0').toString()) ?? 0,
     );
   }
 }
