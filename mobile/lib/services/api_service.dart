@@ -153,6 +153,25 @@ class ApiService {
   }
 
 
+
+  Future<Product> updateProductImage({
+    required int id,
+    required String imagePath,
+  }) async {
+    try {
+      final fileName = imagePath.split('/').isEmpty ? 'product-image.jpg' : imagePath.split('/').last;
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/products/$id/featured-image',
+        data: FormData.fromMap({
+          'image': await MultipartFile.fromFile(imagePath, filename: fileName),
+        }),
+      );
+      return Product.fromJson(response.data ?? {});
+    } on DioException catch (e) {
+      throw ApiException(_readDioError(e));
+    }
+  }
+
   Future<BaleSettings> getBaleSettings() async {
     try {
       final response = await _dio.get<Map<String, dynamic>>('/bale/settings');

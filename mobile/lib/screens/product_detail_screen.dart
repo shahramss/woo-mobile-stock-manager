@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../models/product.dart';
@@ -30,7 +31,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _loading = true;
   bool _saving = false;
   bool _sendingToBale = false;
+  bool _uploadingImage = false;
   bool _inStock = true;
+  bool _hasChanged = false;
   int _baleCooldown = 0;
   String? _error;
 
@@ -86,7 +89,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         stockStatus: _inStock ? 'instock' : 'outofstock',
       );
 
-      setState(() => _product = updated);
+      setState(() {
+        _product = updated;
+        _hasChanged = true;
+      });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تغییرات ذخیره شد')),
@@ -98,6 +104,39 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _showMessage('ذخیره تغییرات انجام نشد.');
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+
+  Future<void> _changeFeaturedImage() async {
+    if (_product == null || _uploadingImage) return;
+
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 88,
+        maxWidth: 2200,
+      );
+      if (picked == null) return;
+
+      setState(() => _uploadingImage = true);
+      final api = context.read<AuthProvider>().api;
+      final updated = await api.updateProductImage(
+        id: widget.productId,
+        imagePath: picked.path,
+      );
+
+      setState(() {
+        _product = updated;
+        _hasChanged = true;
+      });
+      _showMessage('تصویر شاخص محصول تغییر کرد.');
+    } on ApiException catch (e) {
+      _showMessage(e.message);
+    } catch (_) {
+      _showMessage('تغییر تصویر شاخص انجام نشد. دوباره تلاش کنید.');
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
     }
   }
 
@@ -177,9 +216,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(_product?.name ?? widget.productName)),
-      body: _buildBody(),
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.of(context).pop(_hasChanged);
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(title: Text(_product?.name ?? widget.productName)),
+        body: _buildBody(),
+      ),
     );
   }
 
@@ -208,7 +253,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _ProductHeader(product: product),
+            _ProductHeader(
+              product: product,
+              uploadingImage: _uploadingImage,
+              onChangeImage: _changeFeaturedImage,
+            ),
             const SizedBox(height: 14),
             _editCard(),
             const SizedBox(height: 18),
@@ -370,54 +419,81 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 }
 
 class _ProductHeader extends StatelessWidget {
-  const _ProductHeader({required this.product});
+  const _ProductHeader({
+    required this.product,
+    required this.uploadingImage,
+    required this.onChangeImage,
+  });
+
   final Product product;
+  final bool uploadingImage;
+  final VoidCallback onChangeImage;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                width: 88,
-                height: 88,
-                color: const Color(0xFFEFF6FF),
-                child: product.imageUrl.isEmpty
-                    ? const Icon(Icons.image_outlined, color: Color(0xFF2563EB), size: 34)
-                    : Image.network(
-                        product.imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Color(0xFF2563EB), size: 34),
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: 94,
+                    height: 94,
+                    color: const Color(0xFFEFF6FF),
+                    child: product.imageUrl.isEmpty
+                        ? const Icon(Icons.image_outlined, color: Color(0xFF2563EB), size: 34)
+                        : Image.network(
+                            product.imageUrl,
+                            key: ValueKey(product.imageUrl),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Color(0xFF2563EB), size: 34),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('نام محصول', style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5)),
+                      const SizedBox(height: 6),
+                      Text(
+                        product.name,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
                       ),
-              ),
+                      const SizedBox(height: 8),
+                      Text(
+                        product.isInStock ? 'موجود' : 'ناموجود',
+                        style: TextStyle(
+                          color: product.isInStock ? const Color(0xFF166534) : const Color(0xFF991B1B),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('نام محصول', style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5)),
-                  const SizedBox(height: 6),
-                  Text(
-                    product.name,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    product.isInStock ? 'موجود' : 'ناموجود',
-                    style: TextStyle(
-                      color: product.isInStock ? const Color(0xFF166534) : const Color(0xFF991B1B),
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: uploadingImage ? null : onChangeImage,
+              icon: uploadingImage
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.add_photo_alternate_outlined),
+              label: Text(uploadingImage ? 'در حال آپلود تصویر...' : 'تغییر تصویر شاخص'),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'تصویر انتخاب‌شده به عنوان تصویر اصلی محصول در ووکامرس ذخیره می‌شود.',
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5, height: 1.5),
+              textAlign: TextAlign.center,
             ),
           ],
         ),

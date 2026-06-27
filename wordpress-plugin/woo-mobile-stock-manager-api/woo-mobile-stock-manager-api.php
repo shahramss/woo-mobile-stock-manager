@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Woo Mobile Stock Manager API
- * Description: REST API امن برای اپلیکیشن موبایل مدیریت محصولات ووکامرس + ارسال محصول به کانال بله با دکمه سفارش.
- * Version: 1.3.0
+ * Description: REST API امن برای اپلیکیشن مدیریت محصولات ووکامرس + ارسال به بله + تغییر تصویر شاخص محصول.
+ * Version: 1.4.0
  * Author: شهرام سعیدنیا
  * Text Domain: woo-mobile-stock-manager-api
  */
@@ -82,6 +82,16 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
                 'callback' => [$this, 'update_product'],
                 'permission_callback' => [$this, 'can_access'],
                 'args' => ['id' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint']],
+            ],
+        ]);
+
+
+        register_rest_route(self::NAMESPACE, '/products/(?P<id>\d+)/featured-image', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'update_product_featured_image'],
+            'permission_callback' => [$this, 'can_access'],
+            'args' => [
+                'id' => ['required' => true, 'type' => 'integer', 'sanitize_callback' => 'absint'],
             ],
         ]);
 
@@ -332,6 +342,66 @@ final class WMSM_Woo_Mobile_Stock_Manager_API {
             $product->save();
         } catch (Exception $e) {
             return $this->error('wmsm_save_failed', 'ذخیره محصول انجام نشد.', 500);
+        }
+
+        return rest_ensure_response($this->format_product($product));
+    }
+
+
+    public function update_product_featured_image(WP_REST_Request $request) {
+        $wc_error = $this->ensure_woocommerce();
+        if (is_wp_error($wc_error)) {
+            return $wc_error;
+        }
+
+        $product_id = absint($request['id']);
+        $product = wc_get_product($product_id);
+
+        if (!$product) {
+            return $this->error('wmsm_product_not_found', 'محصول پیدا نشد.', 404);
+        }
+
+        if (!$this->can_edit_this_product($product_id)) {
+            return $this->error('wmsm_product_forbidden', 'اجازه ویرایش این محصول را ندارید.', 403);
+        }
+
+        $files = $request->get_file_params();
+        if (empty($files['image']) || !is_array($files['image'])) {
+            return $this->error('wmsm_image_missing', 'فایل تصویر ارسال نشده است.', 400);
+        }
+
+        $file = $files['image'];
+        if (!empty($file['error'])) {
+            return $this->error('wmsm_image_upload_error', 'آپلود تصویر انجام نشد. لطفاً دوباره تلاش کنید.', 400);
+        }
+
+        $max_size = 10 * 1024 * 1024;
+        if (!empty($file['size']) && (int) $file['size'] > $max_size) {
+            return $this->error('wmsm_image_too_large', 'حجم تصویر نباید بیشتر از ۱۰ مگابایت باشد.', 400);
+        }
+
+        $allowed_mimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        $mime_type = !empty($file['type']) ? sanitize_mime_type($file['type']) : '';
+        if ($mime_type !== '' && !in_array($mime_type, $allowed_mimes, true)) {
+            return $this->error('wmsm_image_invalid_type', 'فرمت تصویر باید JPG، PNG، WEBP یا GIF باشد.', 400);
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+
+        $attachment_id = media_handle_sideload($file, $product_id, $product->get_name());
+        if (is_wp_error($attachment_id)) {
+            return $this->error('wmsm_image_save_failed', 'ذخیره تصویر در وردپرس انجام نشد: ' . $attachment_id->get_error_message(), 500);
+        }
+
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', $product->get_name());
+
+        try {
+            $product->set_image_id((int) $attachment_id);
+            $product->save();
+        } catch (Exception $e) {
+            return $this->error('wmsm_image_product_save_failed', 'تصویر آپلود شد اما روی محصول ذخیره نشد.', 500);
         }
 
         return rest_ensure_response($this->format_product($product));
