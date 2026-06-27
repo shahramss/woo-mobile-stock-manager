@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: Woo Mobile Stock Manager API
+ * Plugin Name: Modiriat Sari API
  * Description: REST API امن برای اپلیکیشن مدیریت محصولات ووکامرس + ارسال به بله + تغییر تصویر شاخص محصول.
  * Version: 1.4.0
  * Author: شهرام سعیدنیا

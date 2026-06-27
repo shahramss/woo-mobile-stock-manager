@@ -12,7 +12,7 @@ class WooMobileStockManagerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'مدیریت بانومی',
+      title: 'مدیریت سریع',
       locale: const Locale('fa'),
       builder: (context, child) {
         return Directionality(

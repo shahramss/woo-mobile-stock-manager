@@ -108,13 +108,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 18),
                   const Text(
-                    'مدیریت بانومی',
+                    'مدیریت سریع',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'مدیریت سریع قیمت و موجودی محصولات ووکامرس',
+                    'مدیریت قیمت، موجودی و ارسال محصول به کانال',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
                   ),
@@ -205,7 +205,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'سازنده: شهرام سعیدنیا',
+                    'طراحی و ساخت: شهرام سعیدنیا',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'پروژه: آقای رنجبر و جناب سجادی',
                     style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
                   ),
                 ],

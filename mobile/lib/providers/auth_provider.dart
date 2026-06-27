@@ -89,7 +89,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       final ok = await _localAuth.authenticate(
-        localizedReason: 'برای ورود به مدیریت بانومی هویت خود را تأیید کنید',
+        localizedReason: 'برای ورود به مدیریت سریع هویت خود را تأیید کنید',
         options: const AuthenticationOptions(
           stickyAuth: true,
           biometricOnly: false,

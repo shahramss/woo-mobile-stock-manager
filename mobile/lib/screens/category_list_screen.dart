@@ -177,12 +177,12 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'مدیریت بانومی',
+                      'مدیریت سریع',
                       style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900),
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'مدیریت سریع قیمت و موجودی',
+                      'مدیریت قیمت، موجودی و ارسال محصول',
                       style: TextStyle(color: Color(0xFFE0F2FE), fontSize: 12.5, fontWeight: FontWeight.w600),
                     ),
                   ],
@@ -220,6 +220,11 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'طراحی و ساخت: شهرام سعیدنیا | پروژه: آقای رنجبر و جناب سجادی',
+            style: TextStyle(color: Color(0xFFE0F2FE), fontSize: 11.5, fontWeight: FontWeight.w600),
           ),
         ],
       ),
